@@ -10,6 +10,9 @@ fn next_power_of_two(n : UInt32) -> UInt32 {
   if n <= 1U {
     return 1U
   }
+  if n >= 0x40000000U {
+    return 0x40000000U
+  }
   let mut p = 1U
   while p < n {
     p = p << 1
@@ -520,6 +523,9 @@ pub fn RatchetTreeState::add_leaf(
       leaf_idx
     }
     None => {
+      if old_n_leaves >= 0x40000000U {
+        raise InvalidTreeSize(self.nodes.length())
+      }
       let new_n_leaves = old_n_leaves << 1
       let new_width = @treemath.node_width(new_n_leaves).reinterpret_as_int()
       while self.nodes.length() < new_width {

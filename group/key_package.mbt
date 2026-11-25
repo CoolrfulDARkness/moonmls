@@ -100,10 +100,37 @@ pub fn KeyPackageBundle::generate(
 }
 
 ///|
+fn contains_u32(arr : Array[UInt32], target : UInt32) -> Bool {
+  for i = 0; i < arr.length(); i = i + 1 {
+    if arr[i] == target {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn has_duplicate_extension_types(exts : Array[@types.Extension]) -> Bool {
+  let seen : Map[UInt32, Bool] = Map([])
+  for i = 0; i < exts.length(); i = i + 1 {
+    let t = exts[i].extension_type
+    if seen.contains(t) {
+      return true
+    }
+    seen.set(t, true)
+  }
+  false
+}
+
+///|
 /// Verifies an MLS `KeyPackage` per RFC 9420 §10.1:
 /// - `version == 1` (`mls10`)
 /// - `cipher_suite` matches `cs`
 /// - `init_key != leaf_node.encryption_key`
+/// - `init_key` and `leaf_node.encryption_key` are valid 32-byte non-low-order X25519 keys
+/// - `leaf_node.signature_key` is 32 bytes
+/// - `capabilities` advertise `mls10`, `cs.id()`, and the leaf's credential type
+/// - `kp.extensions` and `leaf_node.extensions` contain no duplicate extension types
 /// - `leaf_node.leaf_node_source == KeyPackage` (with `lifetime` present and no `parent_hash`)
 /// - Valid `LeafNode` signature (`"LeafNodeTBS"`)
 /// - Valid `KeyPackage` signature (`"KeyPackageTBS"`)
@@ -119,6 +146,31 @@ pub fn verify_key_package(
   }
   if kp.init_key == kp.leaf_node.encryption_key {
     raise InvalidKeyPackage("init_key must differ from leaf encryption_key")
+  }
+  @tree.validate_x25519_public_key(kp.init_key) catch {
+    _ => raise InvalidKeyPackage("invalid or low-order init_key")
+  }
+  @tree.validate_x25519_public_key(kp.leaf_node.encryption_key) catch {
+    _ => raise InvalidKeyPackage("invalid or low-order leaf encryption_key")
+  }
+  if kp.leaf_node.signature_key.length() != 32 {
+    raise InvalidKeyPackage("invalid leaf signature_key length")
+  }
+  let caps = kp.leaf_node.capabilities
+  if !contains_u32(caps.versions, @types.PROTOCOL_VERSION_MLS10) {
+    raise InvalidKeyPackage("capabilities missing mls10 protocol version")
+  }
+  if !contains_u32(caps.cipher_suites, cs.id()) {
+    raise InvalidKeyPackage("capabilities missing cipher suite")
+  }
+  if !contains_u32(caps.credentials, kp.leaf_node.credential.credential_type()) {
+    raise InvalidKeyPackage("capabilities missing leaf credential type")
+  }
+  if has_duplicate_extension_types(kp.extensions) {
+    raise InvalidKeyPackage("duplicate extension_type in KeyPackage")
+  }
+  if has_duplicate_extension_types(kp.leaf_node.extensions) {
+    raise InvalidKeyPackage("duplicate extension_type in LeafNode")
   }
   match kp.leaf_node.leaf_node_source {
     @types.LeafNodeSource::KeyPackage => ()

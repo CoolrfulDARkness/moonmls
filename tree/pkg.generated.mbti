@@ -14,6 +14,8 @@ pub fn derive_sender_data_key(@ciphersuite.CipherSuite, Bytes, Bytes) -> Bytes r
 
 pub fn derive_sender_data_nonce(@ciphersuite.CipherSuite, Bytes, Bytes) -> Bytes raise TreeError
 
+pub fn validate_x25519_public_key(Bytes) -> Unit raise TreeError
+
 pub fn verify_leaf_signature(@ciphersuite.CipherSuite, @types.LeafNode, Bytes, UInt32) -> Unit raise TreeError
 
 // Errors
@@ -27,6 +29,7 @@ pub(all) suberror TreeError {
   InvalidParentHash
   InvalidLeafSignature(UInt32)
   DuplicateKey
+  DuplicateExtension(UInt32)
   InvalidUnmergedLeaf
   ReplayDetected(UInt32)
   GenerationTooFarAhead(UInt32)
@@ -47,6 +50,12 @@ pub(all) struct PreparedUpdatePath {
   commit_secret : Bytes
   tree_hash : Bytes
 }
+
+pub struct RatchetStage {
+  // private fields
+}
+pub fn RatchetStage::key(Self) -> Bytes
+pub fn RatchetStage::nonce(Self) -> Bytes
 
 pub struct RatchetTreeState {
   mut nodes : Array[@types.Node?]
@@ -85,12 +94,14 @@ pub struct SecretTree {
   // private fields
 }
 pub fn SecretTree::application_key_nonce_for_generation(Self, UInt32, UInt32) -> (Bytes, Bytes) raise TreeError
+pub fn SecretTree::commit_stage(Self, RatchetStage) -> Unit
 pub fn SecretTree::handshake_key_nonce_for_generation(Self, UInt32, UInt32) -> (Bytes, Bytes) raise TreeError
 pub fn SecretTree::leaf_secret(Self, UInt32) -> Bytes raise TreeError
 pub fn SecretTree::new(@ciphersuite.CipherSuite, Bytes, UInt32) -> Self
 pub fn SecretTree::new_with_window(@ciphersuite.CipherSuite, Bytes, UInt32, UInt32, UInt32) -> Self
 pub fn SecretTree::next_application_key_nonce(Self, UInt32) -> (UInt32, Bytes, Bytes) raise TreeError
 pub fn SecretTree::next_handshake_key_nonce(Self, UInt32) -> (UInt32, Bytes, Bytes) raise TreeError
+pub fn SecretTree::stage_key_nonce(Self, UInt32, UInt32, Bool) -> RatchetStage raise TreeError
 
 // Type aliases
 

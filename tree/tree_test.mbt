@@ -381,3 +381,269 @@ test "treekem end-to-end prepare, encrypt, merge, decrypt, welcome derive, and e
   solo.validate_parent_hashes(cs)
   solo.validate_leaf_signatures(cs, group_id)
 }
+
+///|
+test "C-2 merge_update_path_nodes rejects unrotated key, low-order X25519 key, and duplicate keys" {
+  let cs = @cs.CipherSuite::X25519Aes128GcmSha256Ed25519
+  let group_id = b"c2-test-gid"
+  let (leaf0, _, sig_priv0) = make_signed_kp_leaf(cs, b'\x11', b"alice")
+  let (leaf1, _, _) = make_signed_kp_leaf(cs, b'\x22', b"bob")
+  let tree = @tree.RatchetTreeState::new(leaf0)
+  let _ = tree.add_leaf(leaf1)
+  let rng = @crypto.DeterministicRng::from_seed(b"c2-rng")
+  let work_ref = tree.clone()
+  let prep = work_ref.prepare_update_path_tree(
+    cs,
+    0U,
+    leaf0,
+    sig_priv0,
+    group_id,
+    Bytes::make(32, b'\x33'),
+  )
+  let valid_up = work_ref.encrypt_path_secrets(cs, 0U, prep, b"gc", [], rng)
+  // 1. Low-order X25519 point in UpdatePathNode.encryption_key -> rejected atomically
+  let before_hash = tree.tree_hash(cs)
+  let low_order = Bytes::make(32, b'\x00')
+  let bad_low_up : @types.UpdatePath = {
+    leaf_node: valid_up.leaf_node,
+    nodes: [
+      {
+        encryption_key: low_order,
+        encrypted_path_secret: valid_up.nodes[0].encrypted_path_secret,
+      },
+    ],
+  }
+  let mut got_low = false
+  tree.merge_update_path_nodes(cs, 0U, bad_low_up, group_id, []) catch {
+    @tree.TreeError::CsError(
+      @cs.CsError::CryptoError(@crypto.CryptoError::LowOrderPoint),
+    ) => got_low = true
+    _ => fail("expected LowOrderPoint in merge_update_path_nodes")
+  }
+  assert_true(got_low)
+  assert_eq(tree.tree_hash(cs), before_hash)
+  // 2. Unrotated leaf encryption_key (even with valid parent_hash & valid signature!) -> DuplicateKey
+  let unrotated_unsigned : @types.LeafNode = {
+    encryption_key: leaf0.encryption_key,
+    signature_key: leaf0.signature_key,
+    credential: leaf0.credential,
+    capabilities: leaf0.capabilities,
+    leaf_node_source: @types.LeafNodeSource::Commit,
+    lifetime: None,
+    parent_hash: valid_up.leaf_node.parent_hash,
+    extensions: leaf0.extensions,
+    signature: b"",
+  }
+  let unrotated_sig = cs.sign_with_label(
+    sig_priv0,
+    "LeafNodeTBS",
+    unrotated_unsigned.encode_tbs(Some(group_id), Some(0U)),
+  )
+  let unrotated_leaf : @types.LeafNode = {
+    encryption_key: unrotated_unsigned.encryption_key,
+    signature_key: unrotated_unsigned.signature_key,
+    credential: unrotated_unsigned.credential,
+    capabilities: unrotated_unsigned.capabilities,
+    leaf_node_source: unrotated_unsigned.leaf_node_source,
+    lifetime: unrotated_unsigned.lifetime,
+    parent_hash: unrotated_unsigned.parent_hash,
+    extensions: unrotated_unsigned.extensions,
+    signature: unrotated_sig,
+  }
+  let unrotated_up : @types.UpdatePath = {
+    leaf_node: unrotated_leaf,
+    nodes: valid_up.nodes,
+  }
+  expect_tree_err(
+    () => tree.merge_update_path_nodes(cs, 0U, unrotated_up, group_id, []),
+    @tree.TreeError::DuplicateKey,
+  )
+  assert_eq(tree.tree_hash(cs), before_hash)
+  // 3. Parent key duplicating Bob's leaf encryption_key -> rejected by validate_tree_structure
+  let dup_parent_tree = tree.clone()
+  let dup_node : @types.UpdatePathNode = {
+    encryption_key: leaf1.encryption_key,
+    encrypted_path_secret: valid_up.nodes[0].encrypted_path_secret,
+  }
+  // Compute valid parent_hash for the colliding parent key and sign leaf0
+  let tmp_t = tree.clone()
+  tmp_t.nodes[1] = Some(
+    @types.Node::Parent({
+      encryption_key: leaf1.encryption_key,
+      parent_hash: b"",
+      unmerged_leaves: [],
+    }),
+  )
+  let ph_dup = tmp_t.compute_parent_hash(cs, 1U, 0U)
+  let dup_leaf_unsigned : @types.LeafNode = {
+    encryption_key: valid_up.leaf_node.encryption_key,
+    signature_key: leaf0.signature_key,
+    credential: leaf0.credential,
+    capabilities: leaf0.capabilities,
+    leaf_node_source: @types.LeafNodeSource::Commit,
+    lifetime: None,
+    parent_hash: Some(ph_dup),
+    extensions: leaf0.extensions,
+    signature: b"",
+  }
+  let dup_leaf_sig = cs.sign_with_label(
+    sig_priv0,
+    "LeafNodeTBS",
+    dup_leaf_unsigned.encode_tbs(Some(group_id), Some(0U)),
+  )
+  let dup_up : @types.UpdatePath = {
+    leaf_node: {
+      encryption_key: dup_leaf_unsigned.encryption_key,
+      signature_key: dup_leaf_unsigned.signature_key,
+      credential: dup_leaf_unsigned.credential,
+      capabilities: dup_leaf_unsigned.capabilities,
+      leaf_node_source: dup_leaf_unsigned.leaf_node_source,
+      lifetime: dup_leaf_unsigned.lifetime,
+      parent_hash: dup_leaf_unsigned.parent_hash,
+      extensions: dup_leaf_unsigned.extensions,
+      signature: dup_leaf_sig,
+    },
+    nodes: [dup_node],
+  }
+  expect_tree_err(
+    () => dup_parent_tree.merge_update_path_nodes(cs, 0U, dup_up, group_id, []),
+    @tree.TreeError::DuplicateKey,
+  )
+  assert_eq(dup_parent_tree.tree_hash(cs), before_hash)
+}
+
+///|
+test "H-3 tree validation enforces non-empty tree, unmerged_leaves invariants, X25519, extensions, and empty root parent_hash" {
+  let cs = @cs.CipherSuite::X25519Aes128GcmSha256Ed25519
+  let (leaf0, _, _) = make_signed_kp_leaf(cs, b'\x01', b"alice")
+  let (leaf1, _, _) = make_signed_kp_leaf(cs, b'\x02', b"bob")
+  let (leaf2, _, _) = make_signed_kp_leaf(cs, b'\x03', b"charlie")
+  // 1. All-blank tree -> EmptyTree
+  let all_blank = @tree.RatchetTreeState::from_nodes([None, None, None])
+  expect_tree_err(
+    () => all_blank.validate_tree_structure(),
+    @tree.TreeError::EmptyTree,
+  )
+  // 2. Non-ascending unmerged_leaves -> InvalidUnmergedLeaf
+  let non_asc_tree = @tree.RatchetTreeState::from_nodes([
+    Some(@types.Node::Leaf(leaf0)),
+    Some(
+      @types.Node::Parent({
+        encryption_key: Bytes::make(32, b'\x51'),
+        parent_hash: b"",
+        unmerged_leaves: [1U, 0U],
+      }),
+    ),
+    Some(@types.Node::Leaf(leaf1)),
+  ])
+  expect_tree_err(
+    () => non_asc_tree.validate_tree_structure(),
+    @tree.TreeError::InvalidUnmergedLeaf,
+  )
+  // 3. Unmerged leaf with non-KeyPackage source (Update) -> InvalidUnmergedLeaf
+  let upd_leaf1 : @types.LeafNode = {
+    encryption_key: leaf1.encryption_key,
+    signature_key: leaf1.signature_key,
+    credential: leaf1.credential,
+    capabilities: leaf1.capabilities,
+    leaf_node_source: @types.LeafNodeSource::Update,
+    lifetime: None,
+    parent_hash: None,
+    extensions: [],
+    signature: leaf1.signature,
+  }
+  let bad_src_ul = @tree.RatchetTreeState::from_nodes([
+    Some(@types.Node::Leaf(leaf0)),
+    Some(
+      @types.Node::Parent({
+        encryption_key: Bytes::make(32, b'\x52'),
+        parent_hash: b"",
+        unmerged_leaves: [1U],
+      }),
+    ),
+    Some(@types.Node::Leaf(upd_leaf1)),
+  ])
+  expect_tree_err(
+    () => bad_src_ul.validate_tree_structure(),
+    @tree.TreeError::InvalidUnmergedLeaf,
+  )
+  // 4. Unmerged leaf in root (node 3) missing from non-blank intermediate parent (node 1) -> InvalidUnmergedLeaf
+  let missing_mid_ul = @tree.RatchetTreeState::from_nodes([
+    Some(@types.Node::Leaf(leaf0)),
+    Some(
+      @types.Node::Parent({
+        encryption_key: Bytes::make(32, b'\x53'),
+        parent_hash: b"",
+        unmerged_leaves: [],
+      }),
+    ),
+    Some(@types.Node::Leaf(leaf1)),
+    Some(
+      @types.Node::Parent({
+        encryption_key: Bytes::make(32, b'\x54'),
+        parent_hash: b"",
+        unmerged_leaves: [1U],
+      }),
+    ),
+    Some(@types.Node::Leaf(leaf2)),
+    None,
+    None,
+  ])
+  expect_tree_err(
+    () => missing_mid_ul.validate_tree_structure(),
+    @tree.TreeError::InvalidUnmergedLeaf,
+  )
+  // 5. Low-order X25519 key in leaf -> LowOrderPoint
+  let low_leaf : @types.LeafNode = {
+    encryption_key: Bytes::make(32, b'\x00'),
+    signature_key: leaf0.signature_key,
+    credential: leaf0.credential,
+    capabilities: leaf0.capabilities,
+    leaf_node_source: leaf0.leaf_node_source,
+    lifetime: leaf0.lifetime,
+    parent_hash: leaf0.parent_hash,
+    extensions: [],
+    signature: leaf0.signature,
+  }
+  expect_tree_err(
+    () => @tree.RatchetTreeState::new(low_leaf).validate_tree_structure(),
+    @tree.TreeError::CsError(
+      @cs.CsError::CryptoError(@crypto.CryptoError::LowOrderPoint),
+    ),
+  )
+  // 6. Duplicate extension_type in leaf -> DuplicateExtension
+  let dup_ext_leaf : @types.LeafNode = {
+    encryption_key: leaf0.encryption_key,
+    signature_key: leaf0.signature_key,
+    credential: leaf0.credential,
+    capabilities: leaf0.capabilities,
+    leaf_node_source: leaf0.leaf_node_source,
+    lifetime: leaf0.lifetime,
+    parent_hash: leaf0.parent_hash,
+    extensions: [
+      { extension_type: 1U, extension_data: b"a", },
+      { extension_type: 1U, extension_data: b"b", },
+    ],
+    signature: leaf0.signature,
+  }
+  expect_tree_err(
+    () => @tree.RatchetTreeState::new(dup_ext_leaf).validate_tree_structure(),
+    @tree.TreeError::DuplicateExtension(1U),
+  )
+  // 7. Non-blank root parent with non-empty parent_hash -> InvalidParentHash
+  let non_empty_root_ph = @tree.RatchetTreeState::from_nodes([
+    Some(@types.Node::Leaf(leaf0)),
+    Some(
+      @types.Node::Parent({
+        encryption_key: Bytes::make(32, b'\x55'),
+        parent_hash: Bytes::make(32, b'\xAA'),
+        unmerged_leaves: [],
+      }),
+    ),
+    Some(@types.Node::Leaf(leaf1)),
+  ])
+  expect_tree_err(
+    () => non_empty_root_ph.validate_parent_hashes(cs),
+    @tree.TreeError::InvalidParentHash,
+  )
+}

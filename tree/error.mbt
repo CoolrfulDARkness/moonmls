@@ -10,6 +10,7 @@ pub(all) suberror TreeError {
   InvalidParentHash
   InvalidLeafSignature(UInt32)
   DuplicateKey
+  DuplicateExtension(UInt32)
   InvalidUnmergedLeaf
   ReplayDetected(UInt32)
   GenerationTooFarAhead(UInt32)
@@ -50,6 +51,11 @@ pub impl Show for TreeError with fn output(self, logger) {
       logger.write_string(")")
     }
     DuplicateKey => logger.write_string("DuplicateKey")
+    DuplicateExtension(ext) => {
+      logger.write_string("DuplicateExtension(")
+      Show::output(ext, logger)
+      logger.write_string(")")
+    }
     InvalidUnmergedLeaf => logger.write_string("InvalidUnmergedLeaf")
     ReplayDetected(gen) => {
       logger.write_string("ReplayDetected(")

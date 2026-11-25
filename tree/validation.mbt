@@ -1,7 +1,49 @@
 ///|
+fn fixed_x25519_check_scalar() -> Bytes {
+  // 2^254 + 8: clamped multiple of 8 coprime to curve prime order L
+  Bytes::makei(32, fn(i) {
+    if i == 0 {
+      b'\x08'
+    } else if i == 31 {
+      b'\x40'
+    } else {
+      b'\x00'
+    }
+  })
+}
+
+///|
+/// Validates that `pk` is a 32-byte non-low-order X25519 public key by
+/// performing a scalar multiplication check via `@crypto.x25519_dh`.
+pub fn validate_x25519_public_key(pk : Bytes) -> Unit raise TreeError {
+  let _ = @crypto.x25519_dh(fixed_x25519_check_scalar(), pk) catch {
+    e => raise CsError(@cs.CsError::CryptoError(e))
+  }
+}
+
+///|
+fn validate_unique_extension_types(
+  exts : Array[@types.Extension],
+) -> Unit raise TreeError {
+  let seen : Map[UInt32, Bool] = Map([])
+  for i = 0; i < exts.length(); i = i + 1 {
+    let ext_type = exts[i].extension_type
+    if seen.contains(ext_type) {
+      raise DuplicateExtension(ext_type)
+    }
+    seen.set(ext_type, true)
+  }
+}
+
+///|
 /// Validates ratchet tree structure per RFC 9420 §7.1, §7.4, and §12.4.3.1:
+/// - Tree must contain at least one non-blank leaf.
 /// - Even indices hold only `LeafNode` or `None`; odd indices hold only `ParentNode` or `None`.
-/// - Every `unmerged_leaves` entry on a parent node is a non-blank descendant leaf with no duplicates.
+/// - Every non-blank node's `encryption_key` is a valid 32-byte non-low-order X25519 key,
+///   and every non-blank leaf's `signature_key` is 32 bytes with unique extension types.
+/// - Every `unmerged_leaves` list on a parent node is strictly ascending, contains only
+///   non-blank `KeyPackage` descendant leaves, and every such leaf also appears in
+///   `unmerged_leaves` of all non-blank intermediate parents between the leaf and `P`.
 /// - All `encryption_key` values across all non-blank nodes are unique.
 /// - All `signature_key` values across all non-blank leaf nodes are unique.
 pub fn RatchetTreeState::validate_tree_structure(
@@ -14,6 +56,7 @@ pub fn RatchetTreeState::validate_tree_structure(
   let n_leaves = self.n_leaves()
   let seen_enc_keys : Map[Bytes, Bool] = Map([])
   let seen_sig_keys : Map[Bytes, Bool] = Map([])
+  let mut non_blank_leaves = 0
   for node_idx = 0U; node_idx < n_nodes; node_idx = node_idx + 1U {
     let idx = node_idx.reinterpret_as_int()
     if @treemath.is_leaf(node_idx) {
@@ -21,6 +64,14 @@ pub fn RatchetTreeState::validate_tree_structure(
         None => ()
         Some(@types.Node::Parent(_)) => raise UnexpectedNodeType(node_idx)
         Some(@types.Node::Leaf(leaf)) => {
+          non_blank_leaves += 1
+          validate_x25519_public_key(leaf.encryption_key)
+          if leaf.signature_key.length() != 32 {
+            raise CsError(
+              @cs.CsError::CryptoError(@crypto.CryptoError::InvalidKeyLength),
+            )
+          }
+          validate_unique_extension_types(leaf.extensions)
           if seen_enc_keys.contains(leaf.encryption_key) {
             raise DuplicateKey
           }
@@ -36,29 +87,58 @@ pub fn RatchetTreeState::validate_tree_structure(
         None => ()
         Some(@types.Node::Leaf(_)) => raise UnexpectedNodeType(node_idx)
         Some(@types.Node::Parent(parent)) => {
+          validate_x25519_public_key(parent.encryption_key)
           if seen_enc_keys.contains(parent.encryption_key) {
             raise DuplicateKey
           }
           seen_enc_keys.set(parent.encryption_key, true)
           let (min_leaf, max_leaf) = @treemath.subtree_range(node_idx)
-          let seen_uls : Map[UInt32, Bool] = Map([])
           for i = 0; i < parent.unmerged_leaves.length(); i = i + 1 {
             let u = parent.unmerged_leaves[i]
+            if i > 0 && u <= parent.unmerged_leaves[i - 1] {
+              raise InvalidUnmergedLeaf
+            }
             if u < min_leaf || u > max_leaf || u >= n_leaves {
               raise InvalidUnmergedLeaf
             }
-            if seen_uls.contains(u) {
-              raise InvalidUnmergedLeaf
+            let u_node = @treemath.leaf_to_node(u)
+            match self.nodes[u_node.reinterpret_as_int()] {
+              Some(@types.Node::Leaf(u_leaf)) =>
+                if !(u_leaf.leaf_node_source
+                  is @types.LeafNodeSource::KeyPackage) {
+                  raise InvalidUnmergedLeaf
+                }
+              _ => raise InvalidUnmergedLeaf
             }
-            seen_uls.set(u, true)
-            let u_node = @treemath.leaf_to_node(u).reinterpret_as_int()
-            if !(self.nodes[u_node] is Some(@types.Node::Leaf(_))) {
+            // Verify u appears in unmerged_leaves of all non-blank intermediate
+            // parent nodes strictly between u_node and node_idx (RFC 9420 §12.4.3.1)
+            let dp = @treemath.direct_path(u_node, n_leaves)
+            let mut reached_p = false
+            for j = 0; j < dp.length(); j = j + 1 {
+              let anc = dp[j]
+              if anc == node_idx {
+                reached_p = true
+                break
+              }
+              match self.nodes[anc.reinterpret_as_int()] {
+                Some(@types.Node::Parent(mid_p)) =>
+                  if !contains_uint(mid_p.unmerged_leaves, u) {
+                    raise InvalidUnmergedLeaf
+                  }
+                Some(@types.Node::Leaf(_)) => raise UnexpectedNodeType(anc)
+                None => ()
+              }
+            }
+            if !reached_p {
               raise InvalidUnmergedLeaf
             }
           }
         }
       }
     }
+  }
+  if non_blank_leaves == 0 {
+    raise EmptyTree
   }
 }
 
@@ -114,6 +194,16 @@ pub fn RatchetTreeState::validate_parent_hashes(
 ) -> Unit raise TreeError {
   if self.nodes.length() == 0 {
     raise EmptyTree
+  }
+  let root_idx = @treemath.root(self.n_leaves())
+  if !@treemath.is_leaf(root_idx) {
+    match self.get_parent(root_idx) {
+      Some(root_parent) =>
+        if root_parent.parent_hash.length() != 0 {
+          raise InvalidParentHash
+        }
+      None => ()
+    }
   }
   let n_nodes = self.n_nodes()
   for node_idx = 1U; node_idx < n_nodes; node_idx = node_idx + 2U {

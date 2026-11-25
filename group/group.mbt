@@ -24,26 +24,48 @@ priv struct PendingProposal {
 }
 
 ///|
+/// Active-epoch secrets retained in memory after `SecretTree` initialization.
+/// One-shot root secrets (`encryption_secret`, `epoch_secret`, `joiner_secret`,
+/// `welcome_secret`, `external_secret`) are intentionally discarded for
+/// intra-epoch forward secrecy.
+priv struct ActiveEpochSecrets {
+  sender_data_secret : Bytes
+  exporter_secret : Bytes
+  epoch_authenticator : Bytes
+  init_secret : Bytes
+}
+
+///|
+fn ActiveEpochSecrets::from_epoch_secrets(
+  s : @schedule.EpochSecrets,
+) -> ActiveEpochSecrets {
+  {
+    sender_data_secret: s.sender_data_secret,
+    exporter_secret: s.exporter_secret,
+    epoch_authenticator: s.epoch_authenticator,
+    init_secret: s.init_secret,
+  }
+}
+
+///|
 /// Full Sans-I/O RFC 9420 MLS Group state machine.
 pub struct MlsGroup {
   priv cs : @cs.CipherSuite
   priv mut group_context : @types.GroupContext
   priv mut interim_transcript_hash : Bytes
   priv mut tree : @tree.RatchetTreeState
-  priv mut secrets : @schedule.EpochSecrets
+  priv mut secrets : ActiveEpochSecrets
   priv mut secret_tree : @tree.SecretTree
   priv my_leaf : UInt32
   priv signature_priv : Bytes
   priv mut node_priv_keys : Map[UInt32, Bytes]
   priv mut pending_proposals : Array[PendingProposal]
   priv mut pending_update_privs : Map[Bytes, Bytes]
-  priv mut rx_max_app_gen : Map[UInt32, UInt32]
-  priv mut rx_max_hs_gen : Map[UInt32, UInt32]
   priv mut active : Bool
 }
 
 ///|
-const MAX_FORWARD_GUARD : UInt32 = 1000U
+const MAX_EPOCH : UInt64 = 0xFFFFFFFFFFFFFFFFUL
 
 ///|
 fn clone_u32_bytes_map(src : Map[UInt32, Bytes]) -> Map[UInt32, Bytes] {
@@ -180,6 +202,7 @@ pub fn MlsGroup::create_from_bundle(
     secrets.encryption_secret,
     tree.n_leaves(),
   )
+  let active_secrets = ActiveEpochSecrets::from_epoch_secrets(secrets)
   let node_priv_keys : Map[UInt32, Bytes] = Map([])
   node_priv_keys.set(@treemath.leaf_to_node(0U), bundle.encryption_priv)
   {
@@ -187,15 +210,13 @@ pub fn MlsGroup::create_from_bundle(
     group_context,
     interim_transcript_hash: b"",
     tree,
-    secrets,
+    secrets: active_secrets,
     secret_tree,
     my_leaf: 0U,
     signature_priv: bundle.signature_priv,
     node_priv_keys,
     pending_proposals: [],
     pending_update_privs: Map([]),
-    rx_max_app_gen: Map([]),
-    rx_max_hs_gen: Map([]),
     active: true,
   }
 }
@@ -217,6 +238,12 @@ pub fn MlsGroup::from_welcome(
     bundle.init_priv,
     bundle.key_package,
   )
+  if group_info.group_context.epoch == MAX_EPOCH {
+    raise InvalidCommit("epoch overflow: cannot join group at maximum epoch")
+  }
+  if has_duplicate_extension_types(group_info.extensions) {
+    raise InvalidCommit("duplicate extension_type in GroupInfo")
+  }
   let tree_nodes = match extract_ratchet_tree_extension(group_info.extensions) {
     Some(nodes) => nodes
     None =>
@@ -224,6 +251,11 @@ pub fn MlsGroup::from_welcome(
         Some(nodes) => nodes
         None => raise MissingRatchetTree
       }
+  }
+  if tree_nodes.length() > 0 && tree_nodes[tree_nodes.length() - 1] is None {
+    raise InvalidCommit(
+      "ratchet_tree must not contain trailing blank nodes (RFC 9420 §12.4.3.3)",
+    )
   }
   let tree = @tree.RatchetTreeState::from_nodes(tree_nodes) catch {
     e => raise TreeError(e)
@@ -305,7 +337,24 @@ pub fn MlsGroup::from_welcome(
         node_priv_keys.set(node_idx, sk)
       }
     }
-    None => ()
+    None => {
+      // RFC 9420 §12.4.3.1: when path_secret is absent, my_leaf must appear in
+      // unmerged_leaves of every non-blank parent on direct_path(my_leaf).
+      let dp = @treemath.direct_path(
+        @treemath.leaf_to_node(my_leaf),
+        tree.n_leaves(),
+      )
+      for i = 0; i < dp.length(); i = i + 1 {
+        let p_opt = tree.get_parent(dp[i]) catch { e => raise TreeError(e) }
+        match p_opt {
+          Some(parent) =>
+            if !contains_u32(parent.unmerged_leaves, my_leaf) {
+              raise TreeError(@tree.TreeError::InvalidUnmergedLeaf)
+            }
+          None => ()
+        }
+      }
+    }
   }
   let interim_transcript_hash = @schedule.compute_interim_transcript_hash(
     cs,
@@ -319,20 +368,19 @@ pub fn MlsGroup::from_welcome(
     secrets.encryption_secret,
     tree.n_leaves(),
   )
+  let active_secrets = ActiveEpochSecrets::from_epoch_secrets(secrets)
   {
     cs,
     group_context: group_info.group_context,
     interim_transcript_hash,
     tree,
-    secrets,
+    secrets: active_secrets,
     secret_tree,
     my_leaf,
     signature_priv: bundle.signature_priv,
     node_priv_keys,
     pending_proposals: [],
     pending_update_privs: Map([]),
-    rx_max_app_gen: Map([]),
-    rx_max_hs_gen: Map([]),
     active: true,
   }
 }
@@ -359,6 +407,23 @@ fn MlsGroup::validate_update_leaf(
   }
   if leaf.parent_hash is Some(_) {
     raise InvalidProposal("Update leaf_node must not have parent_hash")
+  }
+  @tree.validate_x25519_public_key(leaf.encryption_key) catch {
+    _ => raise InvalidProposal("invalid or low-order Update encryption_key")
+  }
+  if leaf.signature_key.length() != 32 {
+    raise InvalidProposal("invalid Update signature_key length")
+  }
+  if !contains_u32(leaf.capabilities.versions, @types.PROTOCOL_VERSION_MLS10) ||
+    !contains_u32(leaf.capabilities.cipher_suites, self.cs.id()) ||
+    !contains_u32(
+      leaf.capabilities.credentials,
+      leaf.credential.credential_type(),
+    ) {
+    raise InvalidProposal("Update leaf_node capabilities incompatible")
+  }
+  if has_duplicate_extension_types(leaf.extensions) {
+    raise InvalidProposal("Update leaf_node has duplicate extension_type")
   }
   let cur_opt = self.tree.get_leaf(sender_leaf) catch {
     _ => raise UnknownSender(sender_leaf)
@@ -464,11 +529,13 @@ fn MlsGroup::send_proposal(
   ) catch {
     e => raise ScheduleError(e)
   }
-  self.pending_proposals.push({
-    proposal_ref,
-    sender_leaf: self.my_leaf,
-    proposal,
-  })
+  if self.find_pending_proposal(proposal_ref) is None {
+    self.pending_proposals.push({
+      proposal_ref,
+      sender_leaf: self.my_leaf,
+      proposal,
+    })
+  }
   msg
 }
 
@@ -693,19 +760,153 @@ pub fn MlsGroup::commit(
   rng : @crypto.DeterministicRng,
 ) -> CommitOutput raise GroupError {
   self.ensure_active()
+  if self.group_context.epoch == MAX_EPOCH {
+    raise InvalidCommit("epoch overflow: cannot advance past UInt64 max")
+  }
   let proposal_or_refs : Array[@types.ProposalOrRef] = []
   let resolved : Array[(UInt32, @types.Proposal)] = []
-  // Include pending proposals by reference (omitting committer's own Update per RFC 9420 §12.2)
-  for i = 0; i < self.pending_proposals.length(); i = i + 1 {
-    let pp = self.pending_proposals[i]
-    if pp.sender_leaf == self.my_leaf &&
-      pp.proposal is @types.Proposal::Update(_) {
-      continue
+  // Pre-scan extra_proposals (which remain strictly validated) so pending
+  // proposals do not conflict with explicitly requested Removes or Adds.
+  let extra_removed_targets : Map[UInt32, Bool] = Map([])
+  let extra_add_init_keys : Map[Bytes, Bool] = Map([])
+  let extra_add_enc_keys : Map[Bytes, Bool] = Map([])
+  let extra_add_sig_keys : Map[Bytes, Bool] = Map([])
+  for i = 0; i < extra_proposals.length(); i = i + 1 {
+    match extra_proposals[i] {
+      @types.Proposal::Remove(target) =>
+        if target != self.my_leaf {
+          let opt = self.tree.get_leaf(target) catch { _ => None }
+          if opt is Some(_) {
+            extra_removed_targets.set(target, true)
+          }
+        }
+      @types.Proposal::Add(kp) => {
+        extra_add_init_keys.set(kp.init_key, true)
+        extra_add_enc_keys.set(kp.leaf_node.encryption_key, true)
+        extra_add_sig_keys.set(kp.leaf_node.signature_key, true)
+      }
+      _ => ()
     }
-    proposal_or_refs.push(@types.ProposalOrRef::Reference(pp.proposal_ref))
-    resolved.push((pp.sender_leaf, pp.proposal))
   }
-  // Include extra inline proposals
+  // Deterministic RFC 9420 §12.4.1 conflict filtering over self.pending_proposals:
+  // Pass 1: Removes (skip self, blank leaves, duplicates)
+  let n_pending = self.pending_proposals.length()
+  let selected_pending : Array[Bool] = Array::make(n_pending, false)
+  let selected_removes : Map[UInt32, Bool] = Map([])
+  let effective_removes : Array[UInt32] = []
+  extra_removed_targets.each(fn(t, _v) { effective_removes.push(t) })
+  for i = 0; i < n_pending; i = i + 1 {
+    let pp = self.pending_proposals[i]
+    match pp.proposal {
+      @types.Proposal::Remove(target) => {
+        if target == self.my_leaf ||
+          selected_removes.contains(target) ||
+          extra_removed_targets.contains(target) {
+          continue
+        }
+        let target_opt = self.tree.get_leaf(target) catch { _ => None }
+        if target_opt is None {
+          continue
+        }
+        selected_removes.set(target, true)
+        effective_removes.push(target)
+        selected_pending[i] = true
+      }
+      _ => ()
+    }
+  }
+  // Build preview tree after selected Removes so Update/Add key checks exclude removed leaves
+  let mut preview_tree = self.tree.clone()
+  for i = 0; i < effective_removes.length(); i = i + 1 {
+    preview_tree.remove_leaf(effective_removes[i]) catch {
+      _ => ()
+    }
+  }
+  // Pass 2: Updates (skip committer's own Update, removed senders, duplicate senders, invalid leaves)
+  let updated_senders : Map[UInt32, Bool] = Map([])
+  for i = 0; i < n_pending; i = i + 1 {
+    let pp = self.pending_proposals[i]
+    match pp.proposal {
+      @types.Proposal::Update(leaf) => {
+        if pp.sender_leaf == self.my_leaf ||
+          updated_senders.contains(pp.sender_leaf) ||
+          selected_removes.contains(pp.sender_leaf) ||
+          extra_removed_targets.contains(pp.sender_leaf) {
+          continue
+        }
+        let valid_upd = try {
+          self.validate_update_leaf(pp.sender_leaf, leaf)
+          true
+        } catch {
+          _ => false
+        }
+        if !valid_upd {
+          continue
+        }
+        let trial = preview_tree.clone()
+        let tree_ok = try {
+          trial.update_leaf(pp.sender_leaf, leaf)
+          trial.validate_tree_structure()
+          true
+        } catch {
+          _ => false
+        }
+        if !tree_ok {
+          continue
+        }
+        preview_tree = trial
+        updated_senders.set(pp.sender_leaf, true)
+        selected_pending[i] = true
+      }
+      _ => ()
+    }
+  }
+  // Pass 3: Adds (skip invalid KeyPackages or key conflicts with remaining tree / prior Adds)
+  let seen_init_keys : Map[Bytes, Bool] = Map([])
+  extra_add_init_keys.each(fn(k, _v) { seen_init_keys.set(k, true) })
+  for i = 0; i < n_pending; i = i + 1 {
+    let pp = self.pending_proposals[i]
+    match pp.proposal {
+      @types.Proposal::Add(kp) => {
+        let valid_kp = try {
+          verify_key_package(self.cs, kp)
+          true
+        } catch {
+          _ => false
+        }
+        if !valid_kp ||
+          seen_init_keys.contains(kp.init_key) ||
+          extra_add_enc_keys.contains(kp.leaf_node.encryption_key) ||
+          extra_add_sig_keys.contains(kp.leaf_node.signature_key) {
+          continue
+        }
+        let trial = preview_tree.clone()
+        let tree_ok = try {
+          let _ = trial.add_leaf(kp.leaf_node)
+          trial.validate_tree_structure()
+          true
+        } catch {
+          _ => false
+        }
+        if !tree_ok {
+          continue
+        }
+        preview_tree = trial
+        seen_init_keys.set(kp.init_key, true)
+        selected_pending[i] = true
+      }
+      _ => ()
+    }
+  }
+  // Emit surviving pending proposals in deterministic arrival order
+  for i = 0; i < n_pending; i = i + 1 {
+    if selected_pending[i] {
+      let pp = self.pending_proposals[i]
+      proposal_or_refs.push(@types.ProposalOrRef::Reference(pp.proposal_ref))
+      resolved.push((pp.sender_leaf, pp.proposal))
+    }
+  }
+  // Include extra inline proposals (strictly validated in apply_commit_proposals)
   for i = 0; i < extra_proposals.length(); i = i + 1 {
     let prop = extra_proposals[i]
     proposal_or_refs.push(@types.ProposalOrRef::Proposal(prop))
@@ -952,10 +1153,11 @@ pub fn MlsGroup::commit(
     let (d_node, sk, _pk) = prepared.path_node_keys[i]
     new_node_priv_keys.set(d_node, sk)
   }
+  let new_active_secrets = ActiveEpochSecrets::from_epoch_secrets(new_secrets)
   self.tree = new_tree
   self.group_context = new_group_context
   self.interim_transcript_hash = new_interim_transcript_hash
-  self.secrets = new_secrets
+  self.secrets = new_active_secrets
   self.secret_tree = @tree.SecretTree::new(
     self.cs,
     new_secrets.encryption_secret,
@@ -964,8 +1166,6 @@ pub fn MlsGroup::commit(
   self.node_priv_keys = new_node_priv_keys
   self.pending_proposals = []
   self.pending_update_privs = Map([])
-  self.rx_max_app_gen = Map([])
-  self.rx_max_hs_gen = Map([])
   { commit_msg, welcome, new_epoch: new_group_context.epoch, }
 }
 
@@ -1034,82 +1234,6 @@ pub fn MlsGroup::protect_application(
 }
 
 ///|
-fn MlsGroup::peek_key_nonce(
-  self : MlsGroup,
-  leaf_idx : UInt32,
-  generation : UInt32,
-  is_application : Bool,
-) -> (Bytes, Bytes) raise GroupError {
-  let max_seen = if is_application {
-    match self.rx_max_app_gen.get(leaf_idx) {
-      Some(v) => v
-      None => 0U
-    }
-  } else {
-    match self.rx_max_hs_gen.get(leaf_idx) {
-      Some(v) => v
-      None => 0U
-    }
-  }
-  if generation.to_uint64() >
-    max_seen.to_uint64() + MAX_FORWARD_GUARD.to_uint64() + 1UL {
-    raise TreeError(@tree.TreeError::GenerationTooFarAhead(generation))
-  }
-  let tmp = @tree.SecretTree::new_with_window(
-    self.cs,
-    self.secrets.encryption_secret,
-    self.tree.n_leaves(),
-    0U,
-    generation,
-  )
-  if is_application {
-    tmp.application_key_nonce_for_generation(leaf_idx, generation) catch {
-      e => raise TreeError(e)
-    }
-  } else {
-    tmp.handshake_key_nonce_for_generation(leaf_idx, generation) catch {
-      e => raise TreeError(e)
-    }
-  }
-}
-
-///|
-fn MlsGroup::consume_key_nonce(
-  self : MlsGroup,
-  leaf_idx : UInt32,
-  generation : UInt32,
-  is_application : Bool,
-) -> Unit raise GroupError {
-  if is_application {
-    let _ = self.secret_tree.application_key_nonce_for_generation(
-      leaf_idx, generation,
-    ) catch {
-      e => raise TreeError(e)
-    }
-    match self.rx_max_app_gen.get(leaf_idx) {
-      Some(v) =>
-        if generation > v {
-          self.rx_max_app_gen.set(leaf_idx, generation)
-        }
-      None => self.rx_max_app_gen.set(leaf_idx, generation)
-    }
-  } else {
-    let _ = self.secret_tree.handshake_key_nonce_for_generation(
-      leaf_idx, generation,
-    ) catch {
-      e => raise TreeError(e)
-    }
-    match self.rx_max_hs_gen.get(leaf_idx) {
-      Some(v) =>
-        if generation > v {
-          self.rx_max_hs_gen.set(leaf_idx, generation)
-        }
-      None => self.rx_max_hs_gen.set(leaf_idx, generation)
-    }
-  }
-}
-
-///|
 fn MlsGroup::find_pending_proposal(
   self : MlsGroup,
   proposal_ref : Bytes,
@@ -1157,26 +1281,29 @@ pub fn MlsGroup::process_message(
     @types.ContentType::Application => true
     @types.ContentType::Proposal | @types.ContentType::Commit => false
   }
-  // Peek keys without mutating self.secret_tree so invalid/tampered messages cannot pollute state
-  let (content_key, content_nonce) = self.peek_key_nonce(
+  // O(1) single-leaf ratchet staging: immediately rejects replays & forward jumps
+  // without mutating self.secret_tree until all AEAD/signature/Commit checks pass.
+  let ratchet_stage = self.secret_tree.stage_key_nonce(
     sender_leaf,
     sender_data.generation,
     is_application,
-  )
+  ) catch {
+    e => raise TreeError(e)
+  }
   let auth_content = @schedule.decrypt_private_message_with_keys(
     self.cs,
     sender_node.signature_key,
     self.group_context,
     sender_data,
-    content_key,
-    content_nonce,
+    ratchet_stage.key(),
+    ratchet_stage.nonce(),
     msg,
   ) catch {
     e => raise ScheduleError(e)
   }
   match auth_content.content.content {
     @types.FramedContentBody::Application(plaintext) => {
-      self.consume_key_nonce(sender_leaf, sender_data.generation, true)
+      self.secret_tree.commit_stage(ratchet_stage)
       ProcessedMessage::Application(
         sender_leaf,
         plaintext,
@@ -1189,11 +1316,16 @@ pub fn MlsGroup::process_message(
       let proposal_ref = self.cs.make_proposal_ref(ac_bytes) catch {
         e => raise CsError(e)
       }
-      self.consume_key_nonce(sender_leaf, sender_data.generation, false)
-      self.pending_proposals.push({ proposal_ref, sender_leaf, proposal, })
+      self.secret_tree.commit_stage(ratchet_stage)
+      if self.find_pending_proposal(proposal_ref) is None {
+        self.pending_proposals.push({ proposal_ref, sender_leaf, proposal, })
+      }
       ProcessedMessage::Proposal(sender_leaf, proposal)
     }
     @types.FramedContentBody::Commit(commit_obj) => {
+      if self.group_context.epoch == MAX_EPOCH {
+        raise InvalidCommit("epoch overflow: cannot advance past UInt64 max")
+      }
       let msg_conf_tag = match auth_content.auth.confirmation_tag {
         Some(tag) => tag
         None => raise InvalidCommit("Commit missing confirmation_tag")
@@ -1241,9 +1373,27 @@ pub fn MlsGroup::process_message(
         new_tree,
         resolved,
       )
-      // If we are removed by this authenticated Commit, mark inactive and raise MemberRemoved
+      // If we are removed by this Commit, we MUST still validate Commit.path &
+      // UpdatePath (RFC 9420 §12.4) before committing the ratchet or marking inactive.
       if self_removed {
-        self.consume_key_nonce(sender_leaf, sender_data.generation, false)
+        let update_path = match commit_obj.path {
+          Some(up) => up
+          None =>
+            raise InvalidCommit("Commit removing member requires an UpdatePath")
+        }
+        new_tree.merge_update_path_nodes(
+          self.cs,
+          sender_leaf,
+          update_path,
+          self.group_context.group_id,
+          exclude_leaves,
+        ) catch {
+          e => raise TreeError(e)
+        }
+        new_tree.validate_parent_hashes(self.cs) catch {
+          e => raise TreeError(e)
+        }
+        self.secret_tree.commit_stage(ratchet_stage)
         self.active = false
         raise MemberRemoved
       }
@@ -1379,13 +1529,15 @@ pub fn MlsGroup::process_message(
       ) catch {
         e => raise ScheduleError(e)
       }
-      // Validate against replay window before committing state transition
-      self.consume_key_nonce(sender_leaf, sender_data.generation, false)
       // Atomically advance state to epoch + 1
+      let new_active_secrets = ActiveEpochSecrets::from_epoch_secrets(
+        new_secrets,
+      )
+      self.secret_tree.commit_stage(ratchet_stage)
       self.tree = new_tree
       self.group_context = new_group_context
       self.interim_transcript_hash = new_interim_transcript_hash
-      self.secrets = new_secrets
+      self.secrets = new_active_secrets
       self.secret_tree = @tree.SecretTree::new(
         self.cs,
         new_secrets.encryption_secret,
@@ -1394,8 +1546,6 @@ pub fn MlsGroup::process_message(
       self.node_priv_keys = new_node_priv_keys
       self.pending_proposals = []
       self.pending_update_privs = Map([])
-      self.rx_max_app_gen = Map([])
-      self.rx_max_hs_gen = Map([])
       ProcessedMessage::Commit(sender_leaf, new_group_context.epoch)
     }
   }

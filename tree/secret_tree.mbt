@@ -60,6 +60,17 @@ fn GenerationRatchet::new(initial_secret : Bytes) -> GenerationRatchet {
 }
 
 ///|
+fn GenerationRatchet::clone(self : GenerationRatchet) -> GenerationRatchet {
+  let cached_copy : Map[UInt32, (Bytes, Bytes)] = Map([])
+  self.cached.each(fn(k, v) { cached_copy.set(k, v) })
+  {
+    current_gen: self.current_gen,
+    current_secret: self.current_secret,
+    cached: cached_copy,
+  }
+}
+
+///|
 fn derive_gen_key_nonce(
   cs : @cs.CipherSuite,
   secret : Bytes,
@@ -165,11 +176,37 @@ fn GenerationRatchet::get_for_generation(
 }
 
 ///|
-/// RFC 9420 §9 Secret Tree with per-leaf handshake & application generation
-/// ratchets and forward-secure out-of-order replay protection windows.
+/// Staged single-leaf ratchet transition returned by `SecretTree::stage_key_nonce`.
+/// Allows the caller to authenticate and verify a message before atomically
+/// committing the ratchet advancement via `SecretTree::commit_stage`.
+pub struct RatchetStage {
+  priv leaf_idx : UInt32
+  priv is_application : Bool
+  priv next_ratchet : GenerationRatchet
+  priv key : Bytes
+  priv nonce : Bytes
+}
+
+///|
+/// Returns the staged AEAD key for this generation.
+pub fn RatchetStage::key(self : RatchetStage) -> Bytes {
+  self.key
+}
+
+///|
+/// Returns the staged AEAD base nonce for this generation.
+pub fn RatchetStage::nonce(self : RatchetStage) -> Bytes {
+  self.nonce
+}
+
+///|
+/// RFC 9420 §9.2 Secret Tree with true intra-epoch forward secrecy:
+/// intermediate node secrets are derived on demand and immediately deleted
+/// after splitting into children, and leaf secrets are deleted immediately
+/// after initializing per-leaf handshake & application generation ratchets.
 pub struct SecretTree {
   priv cs : @cs.CipherSuite
-  priv encryption_secret : Bytes
+  priv node_secrets : Map[UInt32, Bytes]
   priv n_leaves : UInt32
   priv full_leaves : UInt32
   priv out_of_order_tolerance : UInt32
@@ -205,11 +242,17 @@ pub fn SecretTree::new_with_window(
   out_of_order_tolerance : UInt32,
   max_forward_distance : UInt32,
 ) -> SecretTree {
+  let full_leaves = next_power_of_two(n_leaves)
+  let node_secrets : Map[UInt32, Bytes] = Map([])
+  if n_leaves > 0U {
+    let root_idx = @treemath.root(full_leaves)
+    node_secrets.set(root_idx, encryption_secret)
+  }
   {
     cs,
-    encryption_secret,
+    node_secrets,
     n_leaves,
-    full_leaves: next_power_of_two(n_leaves),
+    full_leaves,
     out_of_order_tolerance,
     max_forward_distance,
     handshake_ratchets: Map([]),
@@ -218,40 +261,120 @@ pub fn SecretTree::new_with_window(
 }
 
 ///|
-/// Derives the RFC 9420 §9.1 secret for `leaf_idx` by walking from the root
-/// `encryption_secret` down left/right child edges using
-/// `ExpandWithLabel(node_secret, "tree", "left" / "right", Nh)`.
-pub fn SecretTree::leaf_secret(
+/// Splits stored node secrets on demand along the path from the lowest
+/// available ancestor down to `leaf_idx`, immediately deleting every split
+/// parent node secret (RFC 9420 §9.2).
+fn SecretTree::split_to_leaf(
   self : SecretTree,
   leaf_idx : UInt32,
 ) -> Bytes raise TreeError {
-  if leaf_idx >= self.n_leaves {
+  if leaf_idx >= self.n_leaves || leaf_idx >= self.full_leaves {
     raise OutOfBounds(leaf_idx)
   }
   let target = @treemath.leaf_to_node(leaf_idx)
+  match self.node_secrets.get(target) {
+    Some(s) => return s
+    None => ()
+  }
   let mut cur = @treemath.root(self.full_leaves)
-  let mut secret = self.encryption_secret
-  let nh = self.cs.secret_len()
+  let path : Array[UInt32] = [cur]
   while cur != target {
     if target < cur {
-      secret = self.cs.expand_with_label(secret, "tree", b"left", nh) catch {
-        e => raise CsError(e)
-      }
       cur = match @treemath.left(cur) {
         Some(v) => v
         None => raise OutOfBounds(leaf_idx)
       }
     } else {
-      secret = self.cs.expand_with_label(secret, "tree", b"right", nh) catch {
-        e => raise CsError(e)
-      }
       cur = match @treemath.right(cur) {
         Some(v) => v
         None => raise OutOfBounds(leaf_idx)
       }
     }
+    path.push(cur)
   }
-  secret
+  let mut start = -1
+  for i = path.length() - 1; i >= 0; i = i - 1 {
+    if self.node_secrets.contains(path[i]) {
+      start = i
+      break
+    }
+  }
+  if start < 0 {
+    // Leaf secret was already consumed and erased for forward secrecy
+    raise ReplayDetected(0U)
+  }
+  let nh = self.cs.secret_len()
+  for i = start; i < path.length() - 1; i = i + 1 {
+    let node_idx = path[i]
+    let parent_secret = match self.node_secrets.get(node_idx) {
+      Some(s) => s
+      None => raise ReplayDetected(0U)
+    }
+    let l_idx = match @treemath.left(node_idx) {
+      Some(v) => v
+      None => raise OutOfBounds(leaf_idx)
+    }
+    let r_idx = match @treemath.right(node_idx) {
+      Some(v) => v
+      None => raise OutOfBounds(leaf_idx)
+    }
+    let left_secret = self.cs.expand_with_label(
+      parent_secret, "tree", b"left", nh,
+    ) catch {
+      e => raise CsError(e)
+    }
+    let right_secret = self.cs.expand_with_label(
+      parent_secret, "tree", b"right", nh,
+    ) catch {
+      e => raise CsError(e)
+    }
+    self.node_secrets.set(l_idx, left_secret)
+    self.node_secrets.set(r_idx, right_secret)
+    // Immediately erase the split parent secret for forward secrecy
+    self.node_secrets.remove(node_idx)
+  }
+  match self.node_secrets.get(target) {
+    Some(s) => s
+    None => raise ReplayDetected(0U)
+  }
+}
+
+///|
+/// Derives the RFC 9420 §9.1 secret for `leaf_idx` by splitting down from the
+/// lowest available ancestor using `ExpandWithLabel(node_secret, "tree", "left" / "right", Nh)`.
+pub fn SecretTree::leaf_secret(
+  self : SecretTree,
+  leaf_idx : UInt32,
+) -> Bytes raise TreeError {
+  self.split_to_leaf(leaf_idx)
+}
+
+///|
+/// Initializes both handshake and application ratchets for `leaf_idx` on first
+/// access and immediately deletes `leaf_secret` from `node_secrets` (RFC 9420 §9.2).
+fn SecretTree::ensure_leaf_ratchets(
+  self : SecretTree,
+  leaf_idx : UInt32,
+) -> Unit raise TreeError {
+  if leaf_idx >= self.n_leaves || leaf_idx >= self.full_leaves {
+    raise OutOfBounds(leaf_idx)
+  }
+  if self.handshake_ratchets.contains(leaf_idx) &&
+    self.application_ratchets.contains(leaf_idx) {
+    return
+  }
+  let ls = self.split_to_leaf(leaf_idx)
+  let nh = self.cs.secret_len()
+  let hs_init = self.cs.expand_with_label(ls, "handshake", b"", nh) catch {
+    e => raise CsError(e)
+  }
+  let app_init = self.cs.expand_with_label(ls, "application", b"", nh) catch {
+    e => raise CsError(e)
+  }
+  // Immediately delete the leaf secret once both ratchets are seeded
+  self.node_secrets.remove(@treemath.leaf_to_node(leaf_idx))
+  self.handshake_ratchets.set(leaf_idx, GenerationRatchet::new(hs_init))
+  self.application_ratchets.set(leaf_idx, GenerationRatchet::new(app_init))
 }
 
 ///|
@@ -259,25 +382,10 @@ fn SecretTree::get_or_init_handshake_ratchet(
   self : SecretTree,
   leaf_idx : UInt32,
 ) -> GenerationRatchet raise TreeError {
-  if leaf_idx >= self.n_leaves {
-    raise OutOfBounds(leaf_idx)
-  }
+  self.ensure_leaf_ratchets(leaf_idx)
   match self.handshake_ratchets.get(leaf_idx) {
     Some(r) => r
-    None => {
-      let ls = self.leaf_secret(leaf_idx)
-      let init = self.cs.expand_with_label(
-        ls,
-        "handshake",
-        b"",
-        self.cs.secret_len(),
-      ) catch {
-        e => raise CsError(e)
-      }
-      let r = GenerationRatchet::new(init)
-      self.handshake_ratchets.set(leaf_idx, r)
-      r
-    }
+    None => raise OutOfBounds(leaf_idx)
   }
 }
 
@@ -286,25 +394,60 @@ fn SecretTree::get_or_init_application_ratchet(
   self : SecretTree,
   leaf_idx : UInt32,
 ) -> GenerationRatchet raise TreeError {
-  if leaf_idx >= self.n_leaves {
-    raise OutOfBounds(leaf_idx)
-  }
+  self.ensure_leaf_ratchets(leaf_idx)
   match self.application_ratchets.get(leaf_idx) {
     Some(r) => r
-    None => {
-      let ls = self.leaf_secret(leaf_idx)
-      let init = self.cs.expand_with_label(
-        ls,
-        "application",
-        b"",
-        self.cs.secret_len(),
-      ) catch {
-        e => raise CsError(e)
-      }
-      let r = GenerationRatchet::new(init)
-      self.application_ratchets.set(leaf_idx, r)
-      r
-    }
+    None => raise OutOfBounds(leaf_idx)
+  }
+}
+
+///|
+/// O(1) non-mutating ratchet staging for receiver-side message processing.
+/// Immediately rejects replayed (`ReplayDetected`) or excessive forward-jump
+/// (`GenerationTooFarAhead`) generations without advancing the live ratchet.
+/// Call `commit_stage` after message authentication/verification succeeds.
+pub fn SecretTree::stage_key_nonce(
+  self : SecretTree,
+  leaf_idx : UInt32,
+  generation : UInt32,
+  is_application : Bool,
+) -> RatchetStage raise TreeError {
+  if leaf_idx >= self.n_leaves || leaf_idx >= self.full_leaves {
+    raise OutOfBounds(leaf_idx)
+  }
+  let has_ratchet = if is_application {
+    self.application_ratchets.contains(leaf_idx)
+  } else {
+    self.handshake_ratchets.contains(leaf_idx)
+  }
+  if !has_ratchet && generation > self.max_forward_distance {
+    raise GenerationTooFarAhead(generation)
+  }
+  let live = if is_application {
+    self.get_or_init_application_ratchet(leaf_idx)
+  } else {
+    self.get_or_init_handshake_ratchet(leaf_idx)
+  }
+  let staged = live.clone()
+  let (key, nonce) = staged.get_for_generation(
+    self.cs,
+    generation,
+    self.out_of_order_tolerance,
+    self.max_forward_distance,
+  )
+  { leaf_idx, is_application, next_ratchet: staged, key, nonce, }
+}
+
+///|
+/// Atomically commits a previously staged single-leaf ratchet transition.
+pub fn SecretTree::commit_stage(
+  self : SecretTree,
+  stage : RatchetStage,
+) -> Unit {
+  if stage.is_application {
+    self.application_ratchets.set(stage.leaf_idx, stage.next_ratchet)
+  } else {
+    self.handshake_ratchets.set(stage.leaf_idx, stage.next_ratchet)
   }
 }
 

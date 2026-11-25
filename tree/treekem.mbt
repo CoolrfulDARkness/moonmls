@@ -68,12 +68,18 @@ pub fn RatchetTreeState::merge_update_path_nodes(
   if sender_leaf >= n_leaves {
     raise OutOfBounds(sender_leaf)
   }
+  let old_leaf = match self.get_leaf(sender_leaf) {
+    Some(l) => l
+    None => raise BlankLeaf(sender_leaf)
+  }
+  validate_x25519_public_key(update_path.leaf_node.encryption_key)
   let work = self.clone()
   let fdp = work.filtered_direct_path(sender_leaf)
   if update_path.nodes.length() != fdp.length() {
     raise PathMismatch
   }
   for i = 0; i < fdp.length(); i = i + 1 {
+    validate_x25519_public_key(update_path.nodes[i].encryption_key)
     let (_d_node, c_node) = fdp[i]
     let expected_res = work.filtered_resolution(c_node, exclude_leaves)
     if update_path.nodes[i].encrypted_path_secret.length() !=
@@ -106,8 +112,11 @@ pub fn RatchetTreeState::merge_update_path_nodes(
       cs, enc_key, cur_ph, sibling_hash,
     )
   }
-  // Verify leaf_node source, parent_hash, and signature
+  // Verify leaf_node source, parent_hash, signature, key rotation, and full tree structure
   let leaf = update_path.leaf_node
+  if leaf.lifetime is Some(_) {
+    raise InvalidParentHash
+  }
   match leaf.leaf_node_source {
     @types.LeafNodeSource::Commit =>
       match leaf.parent_hash {
@@ -117,7 +126,11 @@ pub fn RatchetTreeState::merge_update_path_nodes(
     _ => raise InvalidParentHash
   }
   verify_leaf_signature(cs, leaf, group_id, sender_leaf)
+  if leaf.encryption_key == old_leaf.encryption_key {
+    raise DuplicateKey
+  }
   work.nodes[leaf_node_idx.reinterpret_as_int()] = Some(@types.Node::Leaf(leaf))
+  work.validate_tree_structure()
   self.nodes = work.nodes
 }
 
