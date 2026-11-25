@@ -93,7 +93,7 @@ flowchart TD
 
 | # | 官方向量文件（IETF RFC 9420） | 校验范围与细节 | 密码套件覆盖 | 所在包 | 状态 |
 |---|---|---|---|---|---|
-| 1 | `tree-math.json` | 全部 10 组树规模（1..255 叶子）的 `n_nodes` / `root` / `left` / `right` / `parent` / `sibling` / `direct_path` / `copath` | 通用 | `treemath` | PASS |
+| 1 | `tree-math.json` | 全部 10 组树规模（1..512 叶子）的 `n_nodes` / `root` / `left` / `right` / `parent` / `sibling` / `direct_path` / `copath` | 通用 | `treemath` | PASS |
 | 2 | `crypto-basics.json` | `RefHash`、`ExpandWithLabel`、`DeriveSecret`、`DeriveTreeSecret`、`SignWithLabel`、`EncryptWithLabel`（HPKE） | CS1 & CS3 | `ciphersuite` | PASS |
 | 3 | `psk_secret.json` | 0..10 个 PSK 链式提取（CS1 11 组 + CS3 11 组，共 22 组）逐字节匹配 | CS1 & CS3 | `schedule` | PASS |
 | 4 | `key-schedule.json` | 全部 5 个 Epoch × 14 项派生字段（`group_context`, `joiner_secret`, `welcome_secret`, `init_secret`, `sender_data_secret`, `encryption_secret`, `exporter_secret`, `epoch_authenticator`, `external_secret`, `confirmation_key`, `membership_key`, `resumption_psk`, `external_pub`, `MLS-Exporter`） | CS1 & CS3 | `schedule` | PASS |
