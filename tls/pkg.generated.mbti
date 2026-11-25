@@ -1,0 +1,73 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "CoolrfulDARkness/moonmls/tls"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn bytes_concat(Array[Bytes]) -> Bytes
+
+pub fn bytes_from_hex(String) -> Bytes raise TlsError
+
+pub fn bytes_slice(Bytes, Int32, Int32) -> Bytes raise TlsError
+
+pub fn bytes_to_hex(Bytes) -> String
+
+pub fn encode_opaque(Bytes) -> Bytes raise TlsError
+
+pub fn encode_varint_bytes(Int32) -> Bytes raise TlsError
+
+// Errors
+#derive(Eq, @debug.Debug)
+pub(all) suberror TlsError {
+  UnexpectedEof
+  InvalidVarint
+  NonMinimalVarint
+  VarintOverflow
+  TrailingData
+  LengthMismatch
+  InvalidEnum(String)
+  LimitExceeded
+}
+pub impl Show for TlsError
+
+// Types and methods
+pub struct Reader {
+  data : Bytes
+  mut pos : Int32
+}
+pub fn Reader::ensure_empty(Self) -> Unit raise TlsError
+pub fn Reader::is_empty(Self) -> Bool
+pub fn Reader::new(Bytes) -> Self
+pub fn Reader::offset(Self) -> Int32
+pub fn Reader::read_fixed(Self, Int32) -> Bytes raise TlsError
+pub fn Reader::read_opaque(Self) -> Bytes raise TlsError
+pub fn[T] Reader::read_optional(Self, (Self) -> T raise TlsError) -> T? raise TlsError
+pub fn Reader::read_u16(Self) -> UInt32 raise TlsError
+pub fn Reader::read_u32(Self) -> UInt32 raise TlsError
+pub fn Reader::read_u64(Self) -> UInt64 raise TlsError
+pub fn Reader::read_u8(Self) -> Byte raise TlsError
+pub fn Reader::read_varint(Self) -> Int32 raise TlsError
+pub fn[T] Reader::read_vec(Self, (Self) -> T raise TlsError) -> Array[T] raise TlsError
+pub fn Reader::remaining(Self) -> Int32
+
+pub struct Writer {
+  buf : Array[Byte]
+}
+pub fn Writer::len(Self) -> Int32
+pub fn Writer::new() -> Self
+pub fn Writer::to_bytes(Self) -> Bytes
+pub fn Writer::write_opaque(Self, Bytes) -> Unit raise TlsError
+pub fn[T] Writer::write_optional(Self, T?, (Self, T) -> Unit raise TlsError) -> Unit raise TlsError
+pub fn Writer::write_raw(Self, Bytes) -> Unit
+pub fn Writer::write_u16(Self, UInt32) -> Unit
+pub fn Writer::write_u32(Self, UInt32) -> Unit
+pub fn Writer::write_u64(Self, UInt64) -> Unit
+pub fn Writer::write_u8(Self, Byte) -> Unit
+pub fn Writer::write_varint(Self, Int32) -> Unit raise TlsError
+pub fn Writer::write_vec(Self, (Self) -> Unit raise TlsError) -> Unit raise TlsError
+
+// Type aliases
+
+// Traits

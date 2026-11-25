@@ -34,7 +34,7 @@ pub fn UpdatePathNode::decode(
 ) -> UpdatePathNode raise @tls.TlsError {
   let encryption_key = r.read_opaque()
   let encrypted_path_secret = r.read_vec(sub => HpkeCiphertext::decode(sub))
-  { encryption_key, encrypted_path_secret }
+  { encryption_key, encrypted_path_secret, }
 }
 
 ///|
@@ -79,7 +79,7 @@ pub fn UpdatePath::to_bytes(self : UpdatePath) -> Bytes raise @tls.TlsError {
 pub fn UpdatePath::decode(r : @tls.Reader) -> UpdatePath raise @tls.TlsError {
   let leaf_node = LeafNode::decode(r)
   let nodes = r.read_vec(sub => UpdatePathNode::decode(sub))
-  { leaf_node, nodes }
+  { leaf_node, nodes, }
 }
 
 ///|
@@ -96,20 +96,20 @@ pub fn UpdatePath::from_bytes(b : Bytes) -> UpdatePath raise @tls.TlsError {
 pub(all) enum Proposal {
   Add(KeyPackage)
   Update(LeafNode)
-  Remove(UInt)
+  Remove(UInt32)
   PreSharedKey(PreSharedKeyId)
   ReInit(
     group_id~ : Bytes,
-    version~ : UInt,
-    cipher_suite~ : UInt,
-    extensions~ : Array[Extension]
+    version~ : UInt32,
+    cipher_suite~ : UInt32,
+    extensions~ : Array[Extension],
   )
   ExternalInit(Bytes)
   GroupContextExtensions(Array[Extension])
 }
 
 ///|
-pub fn Proposal::proposal_type(self : Proposal) -> UInt {
+pub fn Proposal::proposal_type(self : Proposal) -> UInt32 {
   match self {
     Add(_) => PROPOSAL_TYPE_ADD
     Update(_) => PROPOSAL_TYPE_UPDATE
@@ -153,7 +153,7 @@ pub fn Proposal::body_to_bytes(self : Proposal) -> Bytes raise @tls.TlsError {
 ///|
 /// Decodes an inner proposal struct body given its `proposal_type` discriminant.
 pub fn Proposal::decode_body(
-  proposal_type : UInt,
+  proposal_type : UInt32,
   r : @tls.Reader,
 ) -> Proposal raise @tls.TlsError {
   match proposal_type {
@@ -171,15 +171,13 @@ pub fn Proposal::decode_body(
     6U => ExternalInit(r.read_opaque())
     7U => GroupContextExtensions(decode_extensions(r))
     _ =>
-      raise @tls.TlsError::InvalidEnum(
-        "invalid ProposalType: \{proposal_type}",
-      )
+      raise @tls.TlsError::InvalidEnum("invalid ProposalType: \{proposal_type}")
   }
 }
 
 ///|
 pub fn Proposal::body_from_bytes(
-  proposal_type : UInt,
+  proposal_type : UInt32,
   b : Bytes,
 ) -> Proposal raise @tls.TlsError {
   let r = @tls.Reader::new(b)
@@ -306,7 +304,7 @@ pub fn Commit::to_bytes(self : Commit) -> Bytes raise @tls.TlsError {
 pub fn Commit::decode(r : @tls.Reader) -> Commit raise @tls.TlsError {
   let proposals = r.read_vec(sub => ProposalOrRef::decode(sub))
   let path = r.read_optional(sub => UpdatePath::decode(sub))
-  { proposals, path }
+  { proposals, path, }
 }
 
 ///|

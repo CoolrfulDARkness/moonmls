@@ -2,7 +2,7 @@
 /// Errors raised by RFC 9180 HPKE and RFC 9420 MLS CipherSuite operations.
 #derive(Eq, Debug)
 pub(all) suberror CsError {
-  UnsupportedCipherSuite(UInt)
+  UnsupportedCipherSuite(UInt32)
   CryptoError(@crypto.CryptoError)
   TlsError(@tls.TlsError)
   InvalidLength(String)
@@ -11,7 +11,7 @@ pub(all) suberror CsError {
 }
 
 ///|
-pub impl Show for CsError with output(self, logger) {
+pub impl Show for CsError with fn output(self, logger) {
   match self {
     UnsupportedCipherSuite(id) => {
       logger.write_string("UnsupportedCipherSuite(")
@@ -49,7 +49,7 @@ pub(all) enum CipherSuite {
 }
 
 ///|
-pub impl Show for CipherSuite with output(self, logger) {
+pub impl Show for CipherSuite with fn output(self, logger) {
   match self {
     X25519Aes128GcmSha256Ed25519 =>
       logger.write_string("X25519Aes128GcmSha256Ed25519")
@@ -60,7 +60,7 @@ pub impl Show for CipherSuite with output(self, logger) {
 
 ///|
 /// Parses an MLS cipher suite identifier (`uint16`).
-pub fn CipherSuite::from_id(id : UInt) -> CipherSuite raise CsError {
+pub fn CipherSuite::from_id(id : UInt32) -> CipherSuite raise CsError {
   match id {
     1U => X25519Aes128GcmSha256Ed25519
     3U => X25519ChaCha20Poly1305Sha256Ed25519
@@ -70,7 +70,7 @@ pub fn CipherSuite::from_id(id : UInt) -> CipherSuite raise CsError {
 
 ///|
 /// Returns the RFC 9420 §17.1 numeric identifier of this cipher suite.
-pub fn CipherSuite::id(self : CipherSuite) -> UInt {
+pub fn CipherSuite::id(self : CipherSuite) -> UInt32 {
   match self {
     X25519Aes128GcmSha256Ed25519 => 1U
     X25519ChaCha20Poly1305Sha256Ed25519 => 3U
@@ -79,7 +79,7 @@ pub fn CipherSuite::id(self : CipherSuite) -> UInt {
 
 ///|
 /// Returns the hash output length (`Nh`) in bytes.
-pub fn CipherSuite::hash_len(self : CipherSuite) -> Int {
+pub fn CipherSuite::hash_len(self : CipherSuite) -> Int32 {
   match self {
     X25519Aes128GcmSha256Ed25519 | X25519ChaCha20Poly1305Sha256Ed25519 => 32
   }
@@ -87,7 +87,7 @@ pub fn CipherSuite::hash_len(self : CipherSuite) -> Int {
 
 ///|
 /// Returns the AEAD key length (`Nk`) in bytes.
-pub fn CipherSuite::aead_key_len(self : CipherSuite) -> Int {
+pub fn CipherSuite::aead_key_len(self : CipherSuite) -> Int32 {
   match self {
     X25519Aes128GcmSha256Ed25519 => 16
     X25519ChaCha20Poly1305Sha256Ed25519 => 32
@@ -96,7 +96,7 @@ pub fn CipherSuite::aead_key_len(self : CipherSuite) -> Int {
 
 ///|
 /// Returns the AEAD nonce length (`Nn`) in bytes.
-pub fn CipherSuite::aead_nonce_len(self : CipherSuite) -> Int {
+pub fn CipherSuite::aead_nonce_len(self : CipherSuite) -> Int32 {
   match self {
     X25519Aes128GcmSha256Ed25519 | X25519ChaCha20Poly1305Sha256Ed25519 => 12
   }
@@ -104,7 +104,7 @@ pub fn CipherSuite::aead_nonce_len(self : CipherSuite) -> Int {
 
 ///|
 /// Returns the AEAD authentication tag length (`Nt`) in bytes.
-pub fn CipherSuite::aead_tag_len(self : CipherSuite) -> Int {
+pub fn CipherSuite::aead_tag_len(self : CipherSuite) -> Int32 {
   match self {
     X25519Aes128GcmSha256Ed25519 | X25519ChaCha20Poly1305Sha256Ed25519 => 16
   }
@@ -112,7 +112,7 @@ pub fn CipherSuite::aead_tag_len(self : CipherSuite) -> Int {
 
 ///|
 /// Returns the KDF secret length (`Nh`) in bytes.
-pub fn CipherSuite::secret_len(self : CipherSuite) -> Int {
+pub fn CipherSuite::secret_len(self : CipherSuite) -> Int32 {
   match self {
     X25519Aes128GcmSha256Ed25519 | X25519ChaCha20Poly1305Sha256Ed25519 => 32
   }
@@ -120,7 +120,7 @@ pub fn CipherSuite::secret_len(self : CipherSuite) -> Int {
 
 ///|
 /// Returns the RFC 9180 §7.3 HPKE AEAD identifier.
-pub fn CipherSuite::aead_id(self : CipherSuite) -> UInt {
+pub fn CipherSuite::aead_id(self : CipherSuite) -> UInt32 {
   match self {
     X25519Aes128GcmSha256Ed25519 => 1U
     X25519ChaCha20Poly1305Sha256Ed25519 => 3U
@@ -154,7 +154,7 @@ fn string_to_utf8_bytes(s : String) -> Bytes {
 
 ///|
 /// Encodes an unsigned 16-bit integer as big-endian 2 bytes (`I2OSP(val, 2)`).
-fn i2osp2(value : UInt) -> Bytes {
+fn i2osp2(value : UInt32) -> Bytes {
   Bytes::makei(2, fn(i) {
     if i == 0 {
       ((value >> 8) & 0xFFU).to_byte()

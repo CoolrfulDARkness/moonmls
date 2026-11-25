@@ -1,5 +1,5 @@
 ///|
-let sha256_k : FixedArray[UInt] = [
+let sha256_k : FixedArray[UInt32] = [
   0x428a2f98U, 0x71374491U, 0xb5c0fbcfU, 0xe9b5dba5U, 0x3956c25bU, 0x59f111f1U, 0x923f82a4U,
   0xab1c5ed5U, 0xd807aa98U, 0x12835b01U, 0x243185beU, 0x550c7dc3U, 0x72be5d74U, 0x80deb1feU,
   0x9bdc06a7U, 0xc19bf174U, 0xe49b69c1U, 0xefbe4786U, 0x0fc19dc6U, 0x240ca1ccU, 0x2de92c6fU,
@@ -13,15 +13,15 @@ let sha256_k : FixedArray[UInt] = [
 ]
 
 ///|
-fn rotr32(x : UInt, n : Int) -> UInt {
+fn rotr32(x : UInt32, n : Int32) -> UInt32 {
   (x >> n) | (x << (32 - n))
 }
 
 ///|
 priv struct Sha256State {
-  h : FixedArray[UInt]
+  h : FixedArray[UInt32]
   buf : FixedArray[Byte]
-  mut buf_len : Int
+  mut buf_len : Int32
   mut total_len : UInt64
 }
 
@@ -39,7 +39,7 @@ fn Sha256State::new() -> Sha256State {
 }
 
 ///|
-fn sha256_compress(h : FixedArray[UInt], block : FixedArray[Byte]) -> Unit {
+fn sha256_compress(h : FixedArray[UInt32], block : FixedArray[Byte]) -> Unit {
   let w = FixedArray::make(64, 0U)
   for i = 0; i < 16; i = i + 1 {
     w[i] = load_be32_arr(block, i * 4)

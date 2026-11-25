@@ -12,9 +12,7 @@ pub fn compute_confirmed_transcript_hash(
     Commit(_) => ()
     Application(_) | Proposal(_) => raise UnexpectedContentType
   }
-  let encoded = try input.to_bytes() catch {
-    e => raise TlsError(e)
-  }
+  let encoded = input.to_bytes() catch { e => raise TlsError(e) }
   cs.hash(@tls.bytes_concat([interim_transcript_hash, encoded]))
 }
 
@@ -27,9 +25,7 @@ pub fn compute_interim_transcript_hash(
   confirmation_tag : Bytes,
 ) -> Bytes raise ScheduleError {
   let input : @types.InterimTranscriptHashInput = { confirmation_tag, }
-  let encoded = try input.to_bytes() catch {
-    e => raise TlsError(e)
-  }
+  let encoded = input.to_bytes() catch { e => raise TlsError(e) }
   cs.hash(@tls.bytes_concat([confirmed_transcript_hash, encoded]))
 }
 
@@ -63,9 +59,7 @@ pub fn compute_membership_tag(
   membership_key : Bytes,
   tbm : @types.AuthenticatedContentTbm,
 ) -> Bytes raise ScheduleError {
-  let encoded = try tbm.to_bytes() catch {
-    e => raise TlsError(e)
-  }
+  let encoded = tbm.to_bytes() catch { e => raise TlsError(e) }
   cs.mac(membership_key, encoded)
 }
 
@@ -77,8 +71,6 @@ pub fn verify_membership_tag(
   tbm : @types.AuthenticatedContentTbm,
   tag : Bytes,
 ) -> Bool {
-  let encoded = try tbm.to_bytes() catch {
-    _ => return false
-  }
+  let encoded = tbm.to_bytes() catch { _ => return false }
   cs.verify_mac(membership_key, encoded, tag)
 }

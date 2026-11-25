@@ -49,9 +49,9 @@ pub fn compute_psk_secret(
       e => raise TlsError(e)
     }
     let psk_label_bytes = w.to_bytes()
-    let psk_input = try
-      cs.expand_with_label(psk_extracted, "derived psk", psk_label_bytes, nh)
-    catch {
+    let psk_input = cs.expand_with_label(
+      psk_extracted, "derived psk", psk_label_bytes, nh,
+    ) catch {
       e => raise map_cs_error(e)
     }
     psk_secret = cs.extract(psk_input, psk_secret)
@@ -69,14 +69,12 @@ pub fn derive_joiner_secret(
   group_context_bytes : Bytes,
 ) -> Bytes raise ScheduleError {
   let intermediate = cs.extract(prev_init_secret, commit_secret)
-  try
-    cs.expand_with_label(
-      intermediate,
-      "joiner",
-      group_context_bytes,
-      cs.secret_len(),
-    )
-  catch {
+  cs.expand_with_label(
+    intermediate,
+    "joiner",
+    group_context_bytes,
+    cs.secret_len(),
+  ) catch {
     e => raise map_cs_error(e)
   }
 }
@@ -89,7 +87,7 @@ pub fn derive_welcome_secret(
   psk_secret : Bytes,
 ) -> Bytes raise ScheduleError {
   let member_secret = cs.extract(joiner_secret, psk_secret)
-  try cs.derive_secret(member_secret, "welcome") catch {
+  cs.derive_secret(member_secret, "welcome") catch {
     e => raise map_cs_error(e)
   }
 }
@@ -100,14 +98,15 @@ pub fn derive_welcome_key_nonce(
   cs : @cs.CipherSuite,
   welcome_secret : Bytes,
 ) -> (Bytes, Bytes) raise ScheduleError {
-  let key = try
-    cs.expand_with_label(welcome_secret, "key", b"", cs.aead_key_len())
-  catch {
+  let key = cs.expand_with_label(welcome_secret, "key", b"", cs.aead_key_len()) catch {
     e => raise map_cs_error(e)
   }
-  let nonce = try
-    cs.expand_with_label(welcome_secret, "nonce", b"", cs.aead_nonce_len())
-  catch {
+  let nonce = cs.expand_with_label(
+    welcome_secret,
+    "nonce",
+    b"",
+    cs.aead_nonce_len(),
+  ) catch {
     e => raise map_cs_error(e)
   }
   (key, nonce)
@@ -123,55 +122,45 @@ pub fn derive_epoch_secrets_from_joiner(
   group_context_bytes : Bytes,
 ) -> EpochSecrets raise ScheduleError {
   let member_secret = cs.extract(joiner_secret, psk_secret)
-  let welcome_secret = try cs.derive_secret(member_secret, "welcome") catch {
+  let welcome_secret = cs.derive_secret(member_secret, "welcome") catch {
     e => raise map_cs_error(e)
   }
-  let epoch_secret = try
-    cs.expand_with_label(
-      member_secret,
-      "epoch",
-      group_context_bytes,
-      cs.secret_len(),
-    )
-  catch {
+  let epoch_secret = cs.expand_with_label(
+    member_secret,
+    "epoch",
+    group_context_bytes,
+    cs.secret_len(),
+  ) catch {
     e => raise map_cs_error(e)
   }
-  let sender_data_secret = try
-    cs.derive_secret(epoch_secret, "sender data")
-  catch {
+  let sender_data_secret = cs.derive_secret(epoch_secret, "sender data") catch {
     e => raise map_cs_error(e)
   }
-  let encryption_secret = try
-    cs.derive_secret(epoch_secret, "encryption")
-  catch {
+  let encryption_secret = cs.derive_secret(epoch_secret, "encryption") catch {
     e => raise map_cs_error(e)
   }
-  let exporter_secret = try cs.derive_secret(epoch_secret, "exporter") catch {
+  let exporter_secret = cs.derive_secret(epoch_secret, "exporter") catch {
     e => raise map_cs_error(e)
   }
-  let external_secret = try cs.derive_secret(epoch_secret, "external") catch {
+  let external_secret = cs.derive_secret(epoch_secret, "external") catch {
     e => raise map_cs_error(e)
   }
-  let confirmation_key = try cs.derive_secret(epoch_secret, "confirm") catch {
+  let confirmation_key = cs.derive_secret(epoch_secret, "confirm") catch {
     e => raise map_cs_error(e)
   }
-  let membership_key = try cs.derive_secret(epoch_secret, "membership") catch {
+  let membership_key = cs.derive_secret(epoch_secret, "membership") catch {
     e => raise map_cs_error(e)
   }
-  let resumption_psk = try cs.derive_secret(epoch_secret, "resumption") catch {
+  let resumption_psk = cs.derive_secret(epoch_secret, "resumption") catch {
     e => raise map_cs_error(e)
   }
-  let epoch_authenticator = try
-    cs.derive_secret(epoch_secret, "authentication")
-  catch {
+  let epoch_authenticator = cs.derive_secret(epoch_secret, "authentication") catch {
     e => raise map_cs_error(e)
   }
-  let init_secret = try cs.derive_secret(epoch_secret, "init") catch {
+  let init_secret = cs.derive_secret(epoch_secret, "init") catch {
     e => raise map_cs_error(e)
   }
-  let (external_priv, external_pub) = try
-    cs.kem_keypair_from_ikm(external_secret)
-  catch {
+  let (external_priv, external_pub) = cs.kem_keypair_from_ikm(external_secret) catch {
     e => raise map_cs_error(e)
   }
   {
@@ -220,13 +209,13 @@ pub fn mls_exporter(
   exporter_secret : Bytes,
   label : String,
   context : Bytes,
-  length : Int,
+  length : Int32,
 ) -> Bytes raise ScheduleError {
-  let derived = try cs.derive_secret(exporter_secret, label) catch {
+  let derived = cs.derive_secret(exporter_secret, label) catch {
     e => raise map_cs_error(e)
   }
   let context_hash = cs.hash(context)
-  try cs.expand_with_label(derived, "exported", context_hash, length) catch {
+  cs.expand_with_label(derived, "exported", context_hash, length) catch {
     e => raise map_cs_error(e)
   }
 }

@@ -23,7 +23,7 @@ let sha512_k : FixedArray[UInt64] = [
 ]
 
 ///|
-fn rotr64(x : UInt64, n : Int) -> UInt64 {
+fn rotr64(x : UInt64, n : Int32) -> UInt64 {
   (x >> n) | (x << (64 - n))
 }
 
@@ -31,7 +31,7 @@ fn rotr64(x : UInt64, n : Int) -> UInt64 {
 priv struct Sha512State {
   h : FixedArray[UInt64]
   buf : FixedArray[Byte]
-  mut buf_len : Int
+  mut buf_len : Int32
   mut total_len : UInt64
 }
 
@@ -113,8 +113,8 @@ fn Sha512State::update(self : Sha512State, data : Bytes) -> Unit {
 fn Sha512State::update_slice(
   self : Sha512State,
   data : Bytes,
-  start : Int,
-  len : Int,
+  start : Int32,
+  len : Int32,
 ) -> Unit {
   self.total_len = self.total_len + len.to_uint64()
   let mut i = 0

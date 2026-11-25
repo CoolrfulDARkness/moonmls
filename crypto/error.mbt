@@ -12,7 +12,7 @@ pub(all) suberror CryptoError {
 }
 
 ///|
-pub impl Show for CryptoError with output(self, logger) {
+pub impl Show for CryptoError with fn output(self, logger) {
   let name = match self {
     InvalidKeyLength => "InvalidKeyLength"
     InvalidNonceLength => "InvalidNonceLength"
@@ -47,7 +47,7 @@ pub fn xor_bytes(a : Bytes, b : Bytes) -> Bytes raise CryptoError {
 }
 
 ///|
-fn load_be32(data : Bytes, offset : Int) -> UInt {
+fn load_be32(data : Bytes, offset : Int32) -> UInt32 {
   (data[offset].to_uint() << 24) |
   (data[offset + 1].to_uint() << 16) |
   (data[offset + 2].to_uint() << 8) |
@@ -55,7 +55,7 @@ fn load_be32(data : Bytes, offset : Int) -> UInt {
 }
 
 ///|
-fn load_be32_arr(data : FixedArray[Byte], offset : Int) -> UInt {
+fn load_be32_arr(data : FixedArray[Byte], offset : Int32) -> UInt32 {
   (data[offset].to_uint() << 24) |
   (data[offset + 1].to_uint() << 16) |
   (data[offset + 2].to_uint() << 8) |
@@ -63,7 +63,7 @@ fn load_be32_arr(data : FixedArray[Byte], offset : Int) -> UInt {
 }
 
 ///|
-fn store_be32_arr(dst : FixedArray[Byte], offset : Int, val : UInt) -> Unit {
+fn store_be32_arr(dst : FixedArray[Byte], offset : Int32, val : UInt32) -> Unit {
   dst[offset] = ((val >> 24) & 0xFFU).to_byte()
   dst[offset + 1] = ((val >> 16) & 0xFFU).to_byte()
   dst[offset + 2] = ((val >> 8) & 0xFFU).to_byte()
@@ -71,7 +71,7 @@ fn store_be32_arr(dst : FixedArray[Byte], offset : Int, val : UInt) -> Unit {
 }
 
 ///|
-fn load_be64(data : Bytes, offset : Int) -> UInt64 {
+fn load_be64(data : Bytes, offset : Int32) -> UInt64 {
   (data[offset].to_uint64() << 56) |
   (data[offset + 1].to_uint64() << 48) |
   (data[offset + 2].to_uint64() << 40) |
@@ -83,7 +83,7 @@ fn load_be64(data : Bytes, offset : Int) -> UInt64 {
 }
 
 ///|
-fn load_be64_arr(data : FixedArray[Byte], offset : Int) -> UInt64 {
+fn load_be64_arr(data : FixedArray[Byte], offset : Int32) -> UInt64 {
   (data[offset].to_uint64() << 56) |
   (data[offset + 1].to_uint64() << 48) |
   (data[offset + 2].to_uint64() << 40) |
@@ -95,7 +95,7 @@ fn load_be64_arr(data : FixedArray[Byte], offset : Int) -> UInt64 {
 }
 
 ///|
-fn store_be64_arr(dst : FixedArray[Byte], offset : Int, val : UInt64) -> Unit {
+fn store_be64_arr(dst : FixedArray[Byte], offset : Int32, val : UInt64) -> Unit {
   dst[offset] = ((val >> 56) & 0xFFUL).to_byte()
   dst[offset + 1] = ((val >> 48) & 0xFFUL).to_byte()
   dst[offset + 2] = ((val >> 40) & 0xFFUL).to_byte()
@@ -107,7 +107,7 @@ fn store_be64_arr(dst : FixedArray[Byte], offset : Int, val : UInt64) -> Unit {
 }
 
 ///|
-fn load_le32(data : Bytes, offset : Int) -> UInt {
+fn load_le32(data : Bytes, offset : Int32) -> UInt32 {
   data[offset].to_uint() |
   (data[offset + 1].to_uint() << 8) |
   (data[offset + 2].to_uint() << 16) |
@@ -115,7 +115,7 @@ fn load_le32(data : Bytes, offset : Int) -> UInt {
 }
 
 ///|
-fn store_le32_arr(dst : FixedArray[Byte], offset : Int, val : UInt) -> Unit {
+fn store_le32_arr(dst : FixedArray[Byte], offset : Int32, val : UInt32) -> Unit {
   dst[offset] = (val & 0xFFU).to_byte()
   dst[offset + 1] = ((val >> 8) & 0xFFU).to_byte()
   dst[offset + 2] = ((val >> 16) & 0xFFU).to_byte()
@@ -123,7 +123,7 @@ fn store_le32_arr(dst : FixedArray[Byte], offset : Int, val : UInt) -> Unit {
 }
 
 ///|
-fn load_le64(data : Bytes, offset : Int) -> UInt64 {
+fn load_le64(data : Bytes, offset : Int32) -> UInt64 {
   data[offset].to_uint64() |
   (data[offset + 1].to_uint64() << 8) |
   (data[offset + 2].to_uint64() << 16) |
@@ -135,7 +135,7 @@ fn load_le64(data : Bytes, offset : Int) -> UInt64 {
 }
 
 ///|
-fn store_le64_arr(dst : FixedArray[Byte], offset : Int, val : UInt64) -> Unit {
+fn store_le64_arr(dst : FixedArray[Byte], offset : Int32, val : UInt64) -> Unit {
   dst[offset] = (val & 0xFFUL).to_byte()
   dst[offset + 1] = ((val >> 8) & 0xFFUL).to_byte()
   dst[offset + 2] = ((val >> 16) & 0xFFUL).to_byte()

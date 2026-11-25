@@ -11,15 +11,15 @@ pub(all) struct CommitOutput {
 /// Result of processing an incoming `PrivateMessage`.
 #derive(Eq, Debug)
 pub(all) enum ProcessedMessage {
-  Application(UInt, Bytes, Bytes)
-  Proposal(UInt, @types.Proposal)
-  Commit(UInt, UInt64)
+  Application(UInt32, Bytes, Bytes)
+  Proposal(UInt32, @types.Proposal)
+  Commit(UInt32, UInt64)
 }
 
 ///|
 priv struct PendingProposal {
   proposal_ref : Bytes
-  sender_leaf : UInt
+  sender_leaf : UInt32
   proposal : @types.Proposal
 }
 
@@ -32,22 +32,22 @@ pub struct MlsGroup {
   priv mut tree : @tree.RatchetTreeState
   priv mut secrets : @schedule.EpochSecrets
   priv mut secret_tree : @tree.SecretTree
-  priv my_leaf : UInt
+  priv my_leaf : UInt32
   priv signature_priv : Bytes
-  priv mut node_priv_keys : Map[UInt, Bytes]
+  priv mut node_priv_keys : Map[UInt32, Bytes]
   priv mut pending_proposals : Array[PendingProposal]
   priv mut pending_update_privs : Map[Bytes, Bytes]
-  priv mut rx_max_app_gen : Map[UInt, UInt]
-  priv mut rx_max_hs_gen : Map[UInt, UInt]
+  priv mut rx_max_app_gen : Map[UInt32, UInt32]
+  priv mut rx_max_hs_gen : Map[UInt32, UInt32]
   priv mut active : Bool
 }
 
 ///|
-const MAX_FORWARD_GUARD : UInt = 1000U
+const MAX_FORWARD_GUARD : UInt32 = 1000U
 
 ///|
-fn clone_u32_bytes_map(src : Map[UInt, Bytes]) -> Map[UInt, Bytes] {
-  let dst : Map[UInt, Bytes] = Map([])
+fn clone_u32_bytes_map(src : Map[UInt32, Bytes]) -> Map[UInt32, Bytes] {
+  let dst : Map[UInt32, Bytes] = Map([])
   src.each(fn(k, v) { dst.set(k, v) })
   dst
 }
@@ -84,7 +84,7 @@ fn extract_ratchet_tree_extension(
 fn find_my_leaf(
   tree : @tree.RatchetTreeState,
   target_leaf : @types.LeafNode,
-) -> UInt? {
+) -> UInt32? {
   let n = tree.n_leaves()
   for leaf_idx = 0U; leaf_idx < n; leaf_idx = leaf_idx + 1U {
     let opt = tree.get_leaf(leaf_idx) catch { _ => None }
@@ -98,8 +98,8 @@ fn find_my_leaf(
 
 ///|
 fn lookup_path_secret(
-  path_secrets : Array[(UInt, Bytes)],
-  node_idx : UInt,
+  path_secrets : Array[(UInt32, Bytes)],
+  node_idx : UInt32,
 ) -> Bytes? {
   for i = 0; i < path_secrets.length(); i = i + 1 {
     if path_secrets[i].0 == node_idx {
@@ -112,9 +112,9 @@ fn lookup_path_secret(
 ///|
 fn prune_stale_priv_keys(
   tree : @tree.RatchetTreeState,
-  keys : Map[UInt, Bytes],
+  keys : Map[UInt32, Bytes],
 ) -> Unit {
-  let to_remove : Array[UInt] = []
+  let to_remove : Array[UInt32] = []
   let n_nodes = tree.n_nodes()
   keys.each(fn(node_idx, _sk) {
     if node_idx >= n_nodes {
@@ -180,7 +180,7 @@ pub fn MlsGroup::create_from_bundle(
     secrets.encryption_secret,
     tree.n_leaves(),
   )
-  let node_priv_keys : Map[UInt, Bytes] = Map([])
+  let node_priv_keys : Map[UInt32, Bytes] = Map([])
   node_priv_keys.set(@treemath.leaf_to_node(0U), bundle.encryption_priv)
   {
     cs,
@@ -278,9 +278,10 @@ pub fn MlsGroup::from_welcome(
   }
   let my_leaf = match find_my_leaf(tree, bundle.key_package.leaf_node) {
     Some(idx) => idx
-    None => raise InvalidKeyPackage("joiner leaf node not found in ratchet tree")
+    None =>
+      raise InvalidKeyPackage("joiner leaf node not found in ratchet tree")
   }
-  let node_priv_keys : Map[UInt, Bytes] = Map([])
+  let node_priv_keys : Map[UInt32, Bytes] = Map([])
   node_priv_keys.set(@treemath.leaf_to_node(my_leaf), bundle.encryption_priv)
   match group_secrets.path_secret {
     Some(ps) => {
@@ -346,7 +347,7 @@ fn MlsGroup::ensure_active(self : MlsGroup) -> Unit raise GroupError {
 ///|
 fn MlsGroup::validate_update_leaf(
   self : MlsGroup,
-  sender_leaf : UInt,
+  sender_leaf : UInt32,
   leaf : @types.LeafNode,
 ) -> Unit raise GroupError {
   match leaf.leaf_node_source {
@@ -382,12 +383,13 @@ fn MlsGroup::validate_update_leaf(
 ///|
 fn MlsGroup::validate_incoming_proposal(
   self : MlsGroup,
-  sender_leaf : UInt,
+  sender_leaf : UInt32,
   proposal : @types.Proposal,
 ) -> Unit raise GroupError {
   match proposal {
     @types.Proposal::Add(kp) => verify_key_package(self.cs, kp)
-    @types.Proposal::Update(leaf) => self.validate_update_leaf(sender_leaf, leaf)
+    @types.Proposal::Update(leaf) =>
+      self.validate_update_leaf(sender_leaf, leaf)
     @types.Proposal::Remove(target_leaf) => {
       if target_leaf == sender_leaf {
         raise CannotRemoveSelf
@@ -542,7 +544,7 @@ pub fn MlsGroup::propose_update(
 /// Rejects removing oneself (`CannotRemoveSelf`) or a blank/out-of-bounds leaf.
 pub fn MlsGroup::propose_remove(
   self : MlsGroup,
-  target_leaf : UInt,
+  target_leaf : UInt32,
   rng : @crypto.DeterministicRng,
 ) -> @types.PrivateMessage raise GroupError {
   self.ensure_active()
@@ -565,21 +567,16 @@ pub fn MlsGroup::propose_remove(
 fn apply_commit_proposals(
   cs : @cs.CipherSuite,
   group_id : Bytes,
-  committer_leaf : UInt,
-  my_leaf : UInt,
+  committer_leaf : UInt32,
+  my_leaf : UInt32,
   work_tree : @tree.RatchetTreeState,
-  resolved : Array[(UInt, @types.Proposal)],
-) -> (
-  Array[(UInt, @types.KeyPackage)],
-  Array[UInt],
-  @types.LeafNode?,
-  Bool,
-) raise GroupError {
-  let updates : Array[(UInt, @types.LeafNode)] = []
-  let removes : Array[UInt] = []
+  resolved : Array[(UInt32, @types.Proposal)],
+) -> (Array[(UInt32, @types.KeyPackage)], Array[UInt32], @types.LeafNode?, Bool) raise GroupError {
+  let updates : Array[(UInt32, @types.LeafNode)] = []
+  let removes : Array[UInt32] = []
   let adds : Array[@types.KeyPackage] = []
-  let updated_senders : Map[UInt, Bool] = Map([])
-  let removed_targets : Map[UInt, Bool] = Map([])
+  let updated_senders : Map[UInt32, Bool] = Map([])
+  let removed_targets : Map[UInt32, Bool] = Map([])
   for i = 0; i < resolved.length(); i = i + 1 {
     let (sender_leaf, prop) = resolved[i]
     match prop {
@@ -662,8 +659,8 @@ fn apply_commit_proposals(
     }
   }
   // 3. Apply Adds (checking no duplicate init_key across adds)
-  let added_members : Array[(UInt, @types.KeyPackage)] = []
-  let exclude_leaves : Array[UInt] = []
+  let added_members : Array[(UInt32, @types.KeyPackage)] = []
+  let exclude_leaves : Array[UInt32] = []
   let seen_init_keys : Map[Bytes, Bool] = Map([])
   for i = 0; i < adds.length(); i = i + 1 {
     let kp = adds[i]
@@ -697,11 +694,12 @@ pub fn MlsGroup::commit(
 ) -> CommitOutput raise GroupError {
   self.ensure_active()
   let proposal_or_refs : Array[@types.ProposalOrRef] = []
-  let resolved : Array[(UInt, @types.Proposal)] = []
+  let resolved : Array[(UInt32, @types.Proposal)] = []
   // Include pending proposals by reference (omitting committer's own Update per RFC 9420 §12.2)
   for i = 0; i < self.pending_proposals.length(); i = i + 1 {
     let pp = self.pending_proposals[i]
-    if pp.sender_leaf == self.my_leaf && pp.proposal is @types.Proposal::Update(_) {
+    if pp.sender_leaf == self.my_leaf &&
+      pp.proposal is @types.Proposal::Update(_) {
       continue
     }
     proposal_or_refs.push(@types.ProposalOrRef::Reference(pp.proposal_ref))
@@ -837,7 +835,7 @@ pub fn MlsGroup::commit(
       e => raise TlsError(e)
     }
     let gi_extensions : Array[@types.Extension] = [
-      { extension_type: @types.EXT_RATCHET_TREE, extension_data: rt_bytes },
+      { extension_type: @types.EXT_RATCHET_TREE, extension_data: rt_bytes, },
     ]
     let unsigned_gi : @types.GroupInfo = {
       group_context: new_group_context,
@@ -869,10 +867,7 @@ pub fn MlsGroup::commit(
       e => raise ScheduleError(e)
     }
     let encrypted_group_info = self.cs.aead_seal(
-      welcome_key,
-      welcome_nonce,
-      b"",
-      gi_bytes,
+      welcome_key, welcome_nonce, b"", gi_bytes,
     ) catch {
       e => raise CsError(e)
     }
@@ -908,7 +903,7 @@ pub fn MlsGroup::commit(
       }
       encrypted_secrets.push({
         new_member: kp_ref,
-        encrypted_group_secrets: { kem_output, ciphertext },
+        encrypted_group_secrets: { kem_output, ciphertext, },
       })
     }
     Some({
@@ -948,7 +943,7 @@ pub fn MlsGroup::commit(
     e => raise ScheduleError(e)
   }
   // Step 7: Atomically commit new epoch state
-  let new_node_priv_keys : Map[UInt, Bytes] = Map([])
+  let new_node_priv_keys : Map[UInt32, Bytes] = Map([])
   new_node_priv_keys.set(
     @treemath.leaf_to_node(self.my_leaf),
     prepared.leaf_enc_priv,
@@ -971,7 +966,7 @@ pub fn MlsGroup::commit(
   self.pending_update_privs = Map([])
   self.rx_max_app_gen = Map([])
   self.rx_max_hs_gen = Map([])
-  { commit_msg, welcome, new_epoch: new_group_context.epoch }
+  { commit_msg, welcome, new_epoch: new_group_context.epoch, }
 }
 
 ///|
@@ -1041,8 +1036,8 @@ pub fn MlsGroup::protect_application(
 ///|
 fn MlsGroup::peek_key_nonce(
   self : MlsGroup,
-  leaf_idx : UInt,
-  generation : UInt,
+  leaf_idx : UInt32,
+  generation : UInt32,
   is_application : Bool,
 ) -> (Bytes, Bytes) raise GroupError {
   let max_seen = if is_application {
@@ -1056,7 +1051,8 @@ fn MlsGroup::peek_key_nonce(
       None => 0U
     }
   }
-  if generation.to_uint64() > max_seen.to_uint64() + MAX_FORWARD_GUARD.to_uint64() + 1UL {
+  if generation.to_uint64() >
+    max_seen.to_uint64() + MAX_FORWARD_GUARD.to_uint64() + 1UL {
     raise TreeError(@tree.TreeError::GenerationTooFarAhead(generation))
   }
   let tmp = @tree.SecretTree::new_with_window(
@@ -1080,8 +1076,8 @@ fn MlsGroup::peek_key_nonce(
 ///|
 fn MlsGroup::consume_key_nonce(
   self : MlsGroup,
-  leaf_idx : UInt,
-  generation : UInt,
+  leaf_idx : UInt32,
+  generation : UInt32,
   is_application : Bool,
 ) -> Unit raise GroupError {
   if is_application {
@@ -1091,7 +1087,10 @@ fn MlsGroup::consume_key_nonce(
       e => raise TreeError(e)
     }
     match self.rx_max_app_gen.get(leaf_idx) {
-      Some(v) => if generation > v { self.rx_max_app_gen.set(leaf_idx, generation) }
+      Some(v) =>
+        if generation > v {
+          self.rx_max_app_gen.set(leaf_idx, generation)
+        }
       None => self.rx_max_app_gen.set(leaf_idx, generation)
     }
   } else {
@@ -1101,7 +1100,10 @@ fn MlsGroup::consume_key_nonce(
       e => raise TreeError(e)
     }
     match self.rx_max_hs_gen.get(leaf_idx) {
-      Some(v) => if generation > v { self.rx_max_hs_gen.set(leaf_idx, generation) }
+      Some(v) =>
+        if generation > v {
+          self.rx_max_hs_gen.set(leaf_idx, generation)
+        }
       None => self.rx_max_hs_gen.set(leaf_idx, generation)
     }
   }
@@ -1188,7 +1190,7 @@ pub fn MlsGroup::process_message(
         e => raise CsError(e)
       }
       self.consume_key_nonce(sender_leaf, sender_data.generation, false)
-      self.pending_proposals.push({ proposal_ref, sender_leaf, proposal })
+      self.pending_proposals.push({ proposal_ref, sender_leaf, proposal, })
       ProcessedMessage::Proposal(sender_leaf, proposal)
     }
     @types.FramedContentBody::Commit(commit_obj) => {
@@ -1197,7 +1199,7 @@ pub fn MlsGroup::process_message(
         None => raise InvalidCommit("Commit missing confirmation_tag")
       }
       // Resolve all ProposalOrRef entries
-      let resolved : Array[(UInt, @types.Proposal)] = Array(
+      let resolved : Array[(UInt32, @types.Proposal)] = Array(
         capacity=commit_obj.proposals.length(),
       )
       let seen_refs : Map[Bytes, Bool] = Map([])
@@ -1255,7 +1257,8 @@ pub fn MlsGroup::process_message(
                 @treemath.leaf_to_node(self.my_leaf),
                 priv_key,
               )
-            None => raise MissingPrivateKey(@treemath.leaf_to_node(self.my_leaf))
+            None =>
+              raise MissingPrivateKey(@treemath.leaf_to_node(self.my_leaf))
           }
         None => ()
       }
@@ -1287,7 +1290,7 @@ pub fn MlsGroup::process_message(
           let provisional_gc_bytes = provisional_gc.to_bytes() catch {
             e => raise TlsError(e)
           }
-          let mut missing_node : UInt? = None
+          let mut missing_node : UInt32? = None
           let (derived_keys, cs_secret) = new_tree.decrypt_update_path(
             self.cs,
             sender_leaf,
@@ -1418,7 +1421,7 @@ pub fn MlsGroup::epoch(self : MlsGroup) -> UInt64 {
 
 ///|
 /// Returns this member's leaf index in the ratchet tree.
-pub fn MlsGroup::my_leaf_index(self : MlsGroup) -> UInt {
+pub fn MlsGroup::my_leaf_index(self : MlsGroup) -> UInt32 {
   self.my_leaf
 }
 
@@ -1430,9 +1433,9 @@ pub fn MlsGroup::is_active(self : MlsGroup) -> Bool {
 
 ///|
 /// Returns the ascending list of active members as `(leaf_index, identity)` pairs.
-pub fn MlsGroup::members(self : MlsGroup) -> Array[(UInt, Bytes)] {
+pub fn MlsGroup::members(self : MlsGroup) -> Array[(UInt32, Bytes)] {
   let indices = self.tree.active_leaf_indices()
-  let out : Array[(UInt, Bytes)] = Array(capacity=indices.length())
+  let out : Array[(UInt32, Bytes)] = Array(capacity=indices.length())
   for i = 0; i < indices.length(); i = i + 1 {
     let idx = indices[i]
     let leaf_opt = self.tree.get_leaf(idx) catch { _ => None }
@@ -1462,7 +1465,7 @@ pub fn MlsGroup::export_secret(
   self : MlsGroup,
   label : String,
   context : Bytes,
-  length : Int,
+  length : Int32,
 ) -> Bytes raise GroupError {
   self.ensure_active()
   @schedule.mls_exporter(

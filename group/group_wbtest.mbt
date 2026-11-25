@@ -35,7 +35,13 @@ test "tampered Commit confirmation_tag fails atomically without polluting state"
     None => fail("missing alice leaf")
   }
   let ac = @schedule.decrypt_private_message_with_keys(
-    cs, alice_pub, old_gc, sd, key, nonce, c2.commit_msg,
+    cs,
+    alice_pub,
+    old_gc,
+    sd,
+    key,
+    nonce,
+    c2.commit_msg,
   )
   let orig_tag = match ac.auth.confirmation_tag {
     Some(t) => t
@@ -53,7 +59,14 @@ test "tampered Commit confirmation_tag fails atomically without polluting state"
     confirmation_tag: Some(bad_tag),
   }
   let tampered_commit_msg = @schedule.encrypt_private_message_with_keys(
-    cs, old_sd_secret, sd, key, nonce, ac.content, bad_auth, 0,
+    cs,
+    old_sd_secret,
+    sd,
+    key,
+    nonce,
+    ac.content,
+    bad_auth,
+    0,
   )
   // Bob rejects tampered Commit with ConfirmationTagMismatch
   let mut got_tag_mismatch = false
@@ -69,7 +82,10 @@ test "tampered Commit confirmation_tag fails atomically without polluting state"
   assert_eq(bob.epoch_authenticator(), bob_auth_before)
   assert_eq(bob.tree_hash(), bob_th_before)
   // Now deliver the legitimate Commit at the EXACT same generation -> must succeed!
-  assert_eq(bob.process_message(c2.commit_msg), ProcessedMessage::Commit(0U, 2UL))
+  assert_eq(
+    bob.process_message(c2.commit_msg),
+    ProcessedMessage::Commit(0U, 2UL),
+  )
   assert_eq(bob.epoch(), 2UL)
   assert_eq(bob.epoch_authenticator(), alice.epoch_authenticator())
   assert_eq(bob.tree_hash(), alice.tree_hash())
@@ -127,7 +143,12 @@ test "from_welcome MissingRatchetTree and external_tree fallback" {
   )
   let stripped_welcome : @types.Welcome = {
     cipher_suite: cs.id(),
-    secrets: [{ new_member: kp_ref, encrypted_group_secrets: { kem_output: kem_out, ciphertext: ct } }],
+    secrets: [
+      {
+        new_member: kp_ref,
+        encrypted_group_secrets: { kem_output: kem_out, ciphertext: ct, },
+      },
+    ],
     encrypted_group_info: enc_gi,
   }
   // Without external_tree -> MissingRatchetTree

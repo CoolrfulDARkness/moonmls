@@ -22,7 +22,5 @@ test "top-level moonmls facade smoke test" {
   )
   let msg = alice.protect_application(b"hello moonmls", b"aad", rng)
   let res = bob.process_message(msg)
-  assert_true(
-    res is Application(0U, b"hello moonmls", b"aad"),
-  )
+  assert_true(res is Application(0U, b"hello moonmls", b"aad"))
 }

@@ -8,7 +8,7 @@ priv struct EdPoint {
 
 ///|
 fn ed_identity() -> EdPoint {
-  { x: fe_zero(), y: fe_one(), z: fe_one(), t: fe_zero() }
+  { x: fe_zero(), y: fe_one(), z: fe_one(), t: fe_zero(), }
 }
 
 ///|
@@ -55,12 +55,7 @@ fn ed_add(p : EdPoint, q : EdPoint) -> EdPoint {
   let f = fe_sub(d_val, c)
   let g = fe_add(d_val, c)
   let h = fe_add(b, a)
-  {
-    x: fe_mul(e, f),
-    y: fe_mul(g, h),
-    t: fe_mul(e, h),
-    z: fe_mul(f, g),
-  }
+  { x: fe_mul(e, f), y: fe_mul(g, h), t: fe_mul(e, h), z: fe_mul(f, g), }
 }
 
 ///|
@@ -73,23 +68,18 @@ fn ed_double(p : EdPoint) -> EdPoint {
   let e = fe_sub(h, fe_sq(fe_add(p.x, p.y)))
   let g = fe_sub(a, b)
   let f = fe_add(c, g)
-  {
-    x: fe_mul(e, f),
-    y: fe_mul(g, h),
-    t: fe_mul(e, h),
-    z: fe_mul(f, g),
-  }
+  { x: fe_mul(e, f), y: fe_mul(g, h), t: fe_mul(e, h), z: fe_mul(f, g), }
 }
 
 ///|
-fn ed_cswap(p : EdPoint, q : EdPoint, b : Int) -> (EdPoint, EdPoint) {
+fn ed_cswap(p : EdPoint, q : EdPoint, b : Int32) -> (EdPoint, EdPoint) {
   let sx = fe_cswap(p.x, q.x, b)
   let sy = fe_cswap(p.y, q.y, b)
   let sz = fe_cswap(p.z, q.z, b)
   let st = fe_cswap(p.t, q.t, b)
   (
-    { x: sx.0, y: sy.0, z: sz.0, t: st.0 },
-    { x: sx.1, y: sy.1, z: sz.1, t: st.1 },
+    { x: sx.0, y: sy.0, z: sz.0, t: st.0, },
+    { x: sx.1, y: sy.1, z: sz.1, t: st.1, },
   )
 }
 
@@ -182,7 +172,7 @@ fn ed_frombytes(s : Bytes) -> EdPoint? {
   if fe_isnegative(x) != sign {
     x = fe_neg(x)
   }
-  Some({ x, y, z: fe_one(), t: fe_mul(x, y) })
+  Some({ x, y, z: fe_one(), t: fe_mul(x, y), })
 }
 
 ///|

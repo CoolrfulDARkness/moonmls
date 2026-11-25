@@ -1,5 +1,5 @@
 ///|
-fn sec_flip_bit(data : Bytes, byte_idx : Int, mask : Int) -> Bytes {
+fn sec_flip_bit(data : Bytes, byte_idx : Int32, mask : Int32) -> Bytes {
   Bytes::makei(data.length(), fn(i) {
     if i == byte_idx {
       (data[i].to_int() ^ mask).to_byte()
@@ -85,7 +85,10 @@ fn setup_three_member_group(
     None => fail("expected Welcome for Charlie")
   }
   let charlie = @group.MlsGroup::from_welcome(
-    cs, welcome_c, charlie_bundle, None,
+    cs,
+    welcome_c,
+    charlie_bundle,
+    None,
   )
   assert_eq(alice.epoch(), 2UL)
   assert_eq(bob.epoch(), 2UL)
@@ -127,7 +130,12 @@ fn repackage_welcome(
   )
   {
     cipher_suite: cs.id(),
-    secrets: [{ new_member: kp_ref, encrypted_group_secrets: { kem_output, ciphertext } }],
+    secrets: [
+      {
+        new_member: kp_ref,
+        encrypted_group_secrets: { kem_output, ciphertext, },
+      },
+    ],
     encrypted_group_info,
   }
 }
@@ -160,7 +168,9 @@ test "SEC-01: Old epoch application message replay rejected with EpochMismatch a
   assert_eq(bob.tree_hash(), th_before)
   assert_true(bob.is_active())
   let ep2_msg = alice.protect_application(b"epoch-2-ok", b"aad-2", rng)
-  assert_true(bob.process_message(ep2_msg) is Application(0U, b"epoch-2-ok", b"aad-2"))
+  assert_true(
+    bob.process_message(ep2_msg) is Application(0U, b"epoch-2-ok", b"aad-2"),
+  )
 }
 
 ///|
@@ -222,7 +232,8 @@ test "SEC-03: Same-epoch same-generation message replay rejected with ReplayDete
   try {
     let _ = bob.process_message(m0)
   } catch {
-    @group.GroupError::TreeError(@tree.TreeError::ReplayDetected(0U)) => r0 = true
+    @group.GroupError::TreeError(@tree.TreeError::ReplayDetected(0U)) =>
+      r0 = true
     _ => fail("expected ReplayDetected(0)")
   }
   assert_true(r0)
@@ -231,7 +242,8 @@ test "SEC-03: Same-epoch same-generation message replay rejected with ReplayDete
   try {
     let _ = bob.process_message(m1)
   } catch {
-    @group.GroupError::TreeError(@tree.TreeError::ReplayDetected(1U)) => r1 = true
+    @group.GroupError::TreeError(@tree.TreeError::ReplayDetected(1U)) =>
+      r1 = true
     _ => fail("expected ReplayDetected(1)")
   }
   assert_true(r1)
@@ -270,7 +282,8 @@ test "SEC-04: Expired generation beyond out-of-order window rejected with Replay
   try {
     let _ = bob.process_message(msgs[3])
   } catch {
-    @group.GroupError::TreeError(@tree.TreeError::ReplayDetected(3U)) => r3 = true
+    @group.GroupError::TreeError(@tree.TreeError::ReplayDetected(3U)) =>
+      r3 = true
     _ => fail("expected ReplayDetected(3) on second use")
   }
   assert_true(r3)
@@ -336,7 +349,12 @@ test "SEC-05: Excessive forward generation jump DoS rejected with GenerationTooF
     epoch: 1UL,
     content_type: @types.ContentType::Application,
   }
-  let enc_sd = cs.aead_seal(sd_key, sd_nonce, sd_aad.to_bytes(), dos_sd.to_bytes())
+  let enc_sd = cs.aead_seal(
+    sd_key,
+    sd_nonce,
+    sd_aad.to_bytes(),
+    dos_sd.to_bytes(),
+  )
   let dos_msg : @types.PrivateMessage = {
     group_id: b"sec-05-gid",
     epoch: 1UL,
@@ -356,7 +374,9 @@ test "SEC-05: Excessive forward generation jump DoS rejected with GenerationTooF
   assert_true(group_dos_err)
   // Honest gen-0 message from Alice still works with zero state pollution
   let ok_msg = alice.protect_application(b"still-alive", b"", rng)
-  assert_true(bob.process_message(ok_msg) is Application(0U, b"still-alive", b""))
+  assert_true(
+    bob.process_message(ok_msg) is Application(0U, b"still-alive", b""),
+  )
 }
 
 ///|
@@ -391,8 +411,9 @@ test "SEC-06: 1-bit Commit ciphertext tamper rejected with zero state pollution 
     try {
       let _ = bob.process_message(tampered)
     } catch {
-      @group.GroupError::ScheduleError(@schedule.ScheduleError::DecryptionFailed) =>
-        rejected = true
+      @group.GroupError::ScheduleError(
+        @schedule.ScheduleError::DecryptionFailed,
+      ) => rejected = true
       _ => fail("expected DecryptionFailed on 1-bit tampered Commit")
     }
     assert_true(rejected)
@@ -483,7 +504,8 @@ test "SEC-07: 1-bit Commit ConfirmationTag tamper triggers ConfirmationTagMismat
     let _ = bob.process_message(forged_commit_msg)
   } catch {
     @group.GroupError::ConfirmationTagMismatch => got_conf_err = true
-    _ => fail("expected ConfirmationTagMismatch on forged Commit confirmation_tag")
+    _ =>
+      fail("expected ConfirmationTagMismatch on forged Commit confirmation_tag")
   }
   assert_true(got_conf_err)
   // Zero state pollution: Bob still at epoch 1 and genuine Commit succeeds
@@ -590,7 +612,12 @@ test "SEC-08: PublicMessage MembershipTag tamper / strip / spurious tag rejected
       content: @types.FramedContentBody::Proposal(@types.Proposal::Remove(1U)),
     }
     let ext_pm = @schedule.protect_public_message(
-      cs, sig_priv, None, ext_fc, None, None,
+      cs,
+      sig_priv,
+      None,
+      ext_fc,
+      None,
+      None,
     )
     let ext_spurious : @types.PublicMessage = {
       content: ext_pm.content,
@@ -600,7 +627,11 @@ test "SEC-08: PublicMessage MembershipTag tamper / strip / spurious tag rejected
     let mut e3 = false
     try {
       let _ = @schedule.unprotect_public_message(
-        cs, sig_pub, None, ext_spurious, None,
+        cs,
+        sig_pub,
+        None,
+        ext_spurious,
+        None,
       )
     } catch {
       @schedule.ScheduleError::InvalidMembershipTag => e3 = true
@@ -634,9 +665,7 @@ test "SEC-09: Forged Ed25519 signature attacks (tampered content / 1-bit sig fli
   let short_sig = @tls.bytes_slice(sig, 0, 63)
   assert_false(@crypto.ed25519_verify(pk1, msg, short_sig))
   let mut got_invalid = false
-  try {
-    @crypto.ed25519_verify_or_raise(pk2, msg, sig)
-  } catch {
+  @crypto.ed25519_verify_or_raise(pk2, msg, sig) catch {
     @crypto.CryptoError::InvalidSignature => got_invalid = true
     _ => fail("expected CryptoError::InvalidSignature")
   }
@@ -645,9 +674,16 @@ test "SEC-09: Forged Ed25519 signature attacks (tampered content / 1-bit sig fli
   let labeled_sig = cs.sign_with_label(seed1, "LeafNodeTBS", msg)
   assert_true(cs.verify_with_label(pk1, "LeafNodeTBS", msg, labeled_sig))
   assert_false(cs.verify_with_label(pk1, "KeyPackageTBS", msg, labeled_sig))
-  assert_false(cs.verify_with_label(pk1, "LeafNodeTBS", b"tampered", labeled_sig))
   assert_false(
-    cs.verify_with_label(pk1, "LeafNodeTBS", msg, sec_flip_last_bit(labeled_sig)),
+    cs.verify_with_label(pk1, "LeafNodeTBS", b"tampered", labeled_sig),
+  )
+  assert_false(
+    cs.verify_with_label(
+      pk1,
+      "LeafNodeTBS",
+      msg,
+      sec_flip_last_bit(labeled_sig),
+    ),
   )
 }
 
@@ -669,9 +705,7 @@ test "SEC-10: Ed25519 non-canonical scalar S >= L malleability attack rejected" 
   let malleable_sig = @tls.bytes_concat([r_part, s_plus_l])
   assert_false(@crypto.ed25519_verify(pk, msg, malleable_sig))
   let mut raised = false
-  try {
-    @crypto.ed25519_verify_or_raise(pk, msg, malleable_sig)
-  } catch {
+  @crypto.ed25519_verify_or_raise(pk, msg, malleable_sig) catch {
     @crypto.CryptoError::InvalidSignature => raised = true
     _ => fail("expected InvalidSignature for S + L malleability")
   }
@@ -758,9 +792,7 @@ test "SEC-11: Tampered KeyPackage signature and LeafNode signature rejected by v
   }
   for bad in [bad_kp_sig, bad_leaf_kp, bad_cred_kp] {
     let mut v_err = false
-    try {
-      @group.verify_key_package(cs, bad)
-    } catch {
+    @group.verify_key_package(cs, bad) catch {
       @group.GroupError::InvalidKeyPackage(_) => v_err = true
       _ => fail("expected InvalidKeyPackage from verify_key_package")
     }
@@ -814,9 +846,7 @@ test "SEC-12: KeyPackage key reuse attack (init_key == leaf_node.encryption_key)
     ),
   )
   let mut e_verify = false
-  try {
-    @group.verify_key_package(cs, reused_kp)
-  } catch {
+  @group.verify_key_package(cs, reused_kp) catch {
     @group.GroupError::InvalidKeyPackage(_) => e_verify = true
     _ => fail("expected InvalidKeyPackage on key reuse")
   }
@@ -863,7 +893,10 @@ test "SEC-13: Tampered Welcome encrypted_group_info or GroupInfo signature rejec
     let _ = @group.MlsGroup::from_welcome(cs, bad_egi_welcome, bob_bundle, None)
   } catch {
     @group.GroupError::CsError(@cs.CsError::DecryptionFailed) => e_egi = true
-    _ => fail("expected CsError(DecryptionFailed) on tampered encrypted_group_info")
+    _ =>
+      fail(
+        "expected CsError(DecryptionFailed) on tampered encrypted_group_info",
+      )
   }
   assert_true(e_egi)
   // Case B: Re-package Welcome with 1-bit flipped GroupInfo.signature (outer AEAD/HPKE valid!)
@@ -1008,7 +1041,9 @@ test "SEC-15: Cross-group group_id confusion injection rejected with GroupIdMism
   assert_true(e_prop)
   // Group B remains completely healthy
   let msg_from_b = alice_b.protect_application(b"beta-ok", b"", rng_b)
-  assert_true(bob_b.process_message(msg_from_b) is Application(0U, b"beta-ok", b""))
+  assert_true(
+    bob_b.process_message(msg_from_b) is Application(0U, b"beta-ok", b""),
+  )
 }
 
 ///|
@@ -1035,8 +1070,9 @@ test "SEC-16: Tampered PrivateMessage authenticated_data (AAD) rejected by AEAD 
     try {
       let _ = bob.process_message(tampered_aad)
     } catch {
-      @group.GroupError::ScheduleError(@schedule.ScheduleError::DecryptionFailed) =>
-        rejected = true
+      @group.GroupError::ScheduleError(
+        @schedule.ScheduleError::DecryptionFailed,
+      ) => rejected = true
       _ => fail("expected DecryptionFailed on tampered AAD")
     }
     assert_true(rejected)
@@ -1097,7 +1133,8 @@ test "SEC-17: Tampered PrivateMessage encrypted_sender_data rejected by AEAD in 
     }
     // Original valid message still succeeds
     assert_true(
-      bob.process_message(msg) is Application(0U, b"sender-data-protected", b"aad"),
+      bob.process_message(msg)
+      is Application(0U, b"sender-data-protected", b"aad"),
     )
   }
 }
@@ -1131,7 +1168,7 @@ test "SEC-18: PrivateMessageContent non-zero trailing padding injection rejected
   )
   let pmc : @types.PrivateMessageContent = {
     content: fc.content,
-    auth: { signature: sig, confirmation_tag: None },
+    auth: { signature: sig, confirmation_tag: None, },
     padding_len: 0,
   }
   let base_bytes = pmc.to_bytes()
@@ -1209,12 +1246,15 @@ test "SEC-18: PrivateMessageContent non-zero trailing padding injection rejected
     @group.GroupError::ScheduleError(
       @schedule.ScheduleError::TlsError(@tls.TlsError::InvalidEnum(_)),
     ) => group_pad_err = true
-    _ => fail("expected ScheduleError(TlsError(InvalidEnum)) on non-zero padding")
+    _ =>
+      fail("expected ScheduleError(TlsError(InvalidEnum)) on non-zero padding")
   }
   assert_true(group_pad_err)
   // Gen 0 was NOT consumed on failure; Alice's honest gen-0 message still succeeds
   let ok_msg = alice.protect_application(b"clean-msg", b"ok", rng)
-  assert_true(bob.process_message(ok_msg) is Application(0U, b"clean-msg", b"ok"))
+  assert_true(
+    bob.process_message(ok_msg) is Application(0U, b"clean-msg", b"ok"),
+  )
 }
 
 ///|
@@ -1282,7 +1322,8 @@ test "SEC-19: Out-of-bounds tree node and leaf index attacks rejected with OutOf
   try {
     let _ = alice.propose_remove(99U, rng)
   } catch {
-    @group.GroupError::TreeError(@tree.TreeError::OutOfBounds(99U)) => e_rm = true
+    @group.GroupError::TreeError(@tree.TreeError::OutOfBounds(99U)) =>
+      e_rm = true
     _ => fail("expected GroupError::TreeError(OutOfBounds(99))")
   }
   assert_true(e_rm)
@@ -1319,9 +1360,7 @@ test "SEC-20: RatchetTree duplicate keys (DuplicateKey) and invalid unmerged_lea
     }),
   )
   let mut e_dup_enc = false
-  try {
-    @tree.RatchetTreeState::from_nodes(dup_enc_nodes).validate_tree_structure()
-  } catch {
+  @tree.RatchetTreeState::from_nodes(dup_enc_nodes).validate_tree_structure() catch {
     @tree.TreeError::DuplicateKey => e_dup_enc = true
     _ => fail("expected DuplicateKey for duplicate leaf encryption_key")
   }
@@ -1342,9 +1381,7 @@ test "SEC-20: RatchetTree duplicate keys (DuplicateKey) and invalid unmerged_lea
     }),
   )
   let mut e_dup_sig = false
-  try {
-    @tree.RatchetTreeState::from_nodes(dup_sig_nodes).validate_tree_structure()
-  } catch {
+  @tree.RatchetTreeState::from_nodes(dup_sig_nodes).validate_tree_structure() catch {
     @tree.TreeError::DuplicateKey => e_dup_sig = true
     _ => fail("expected DuplicateKey for duplicate leaf signature_key")
   }
@@ -1359,9 +1396,7 @@ test "SEC-20: RatchetTree duplicate keys (DuplicateKey) and invalid unmerged_lea
     }),
   )
   let mut e_dup_par = false
-  try {
-    @tree.RatchetTreeState::from_nodes(dup_parent_nodes).validate_tree_structure()
-  } catch {
+  @tree.RatchetTreeState::from_nodes(dup_parent_nodes).validate_tree_structure() catch {
     @tree.TreeError::DuplicateKey => e_dup_par = true
     _ => fail("expected DuplicateKey for parent/leaf encryption_key collision")
   }
@@ -1376,9 +1411,7 @@ test "SEC-20: RatchetTree duplicate keys (DuplicateKey) and invalid unmerged_lea
     }),
   )
   let mut e_ul1 = false
-  try {
-    @tree.RatchetTreeState::from_nodes(bad_ul_subtree).validate_tree_structure()
-  } catch {
+  @tree.RatchetTreeState::from_nodes(bad_ul_subtree).validate_tree_structure() catch {
     @tree.TreeError::InvalidUnmergedLeaf => e_ul1 = true
     _ => fail("expected InvalidUnmergedLeaf for non-descendant leaf")
   }
@@ -1393,9 +1426,7 @@ test "SEC-20: RatchetTree duplicate keys (DuplicateKey) and invalid unmerged_lea
     }),
   )
   let mut e_ul2 = false
-  try {
-    @tree.RatchetTreeState::from_nodes(bad_ul_dup).validate_tree_structure()
-  } catch {
+  @tree.RatchetTreeState::from_nodes(bad_ul_dup).validate_tree_structure() catch {
     @tree.TreeError::InvalidUnmergedLeaf => e_ul2 = true
     _ => fail("expected InvalidUnmergedLeaf for duplicate entry")
   }
@@ -1411,9 +1442,7 @@ test "SEC-20: RatchetTree duplicate keys (DuplicateKey) and invalid unmerged_lea
     }),
   )
   let mut e_ul3 = false
-  try {
-    @tree.RatchetTreeState::from_nodes(bad_ul_blank).validate_tree_structure()
-  } catch {
+  @tree.RatchetTreeState::from_nodes(bad_ul_blank).validate_tree_structure() catch {
     @tree.TreeError::InvalidUnmergedLeaf => e_ul3 = true
     _ => fail("expected InvalidUnmergedLeaf for blank leaf")
   }
@@ -1458,9 +1487,7 @@ test "SEC-21: RatchetTree parent_hash chain tampering rejected with InvalidParen
     }),
   )
   let mut e_leaf_ph = false
-  try {
-    @tree.RatchetTreeState::from_nodes(bad_leaf_nodes).validate_parent_hashes(cs)
-  } catch {
+  @tree.RatchetTreeState::from_nodes(bad_leaf_nodes).validate_parent_hashes(cs) catch {
     @tree.TreeError::InvalidParentHash => e_leaf_ph = true
     _ => fail("expected InvalidParentHash on tampered leaf parent_hash")
   }
@@ -1479,9 +1506,7 @@ test "SEC-21: RatchetTree parent_hash chain tampering rejected with InvalidParen
     }),
   )
   let mut e_par_ph = false
-  try {
-    @tree.RatchetTreeState::from_nodes(bad_par_nodes).validate_parent_hashes(cs)
-  } catch {
+  @tree.RatchetTreeState::from_nodes(bad_par_nodes).validate_parent_hashes(cs) catch {
     @tree.TreeError::InvalidParentHash => e_par_ph = true
     _ => fail("expected InvalidParentHash on tampered parent node parent_hash")
   }
@@ -1496,9 +1521,7 @@ test "SEC-22: Removed member messages rejected by group and removed member canno
   )
   // Charlie creates a message at epoch 2 before being removed
   let charlie_stale_msg = charlie.protect_application(
-    b"still-in-group?",
-    b"",
-    rng,
+    b"still-in-group?", b"", rng,
   )
   // Alice removes Charlie (leaf 2) and commits -> epoch 3
   let prop_rm = alice.propose_remove(2U, rng)
@@ -1524,7 +1547,10 @@ test "SEC-22: Removed member messages rejected by group and removed member canno
     let _ = charlie.process_message(ep3_secret)
   } catch {
     @group.GroupError::EpochMismatch(2UL, 3UL) => e_ep = true
-    _ => fail("expected EpochMismatch when removed member receives epoch-3 message")
+    _ =>
+      fail(
+        "expected EpochMismatch when removed member receives epoch-3 message",
+      )
   }
   assert_true(e_ep)
   // Even if attacker rewrites epoch field to 2UL, Charlie's epoch-2 keys cannot decrypt it!
@@ -1542,7 +1568,10 @@ test "SEC-22: Removed member messages rejected by group and removed member canno
   } catch {
     @group.GroupError::ScheduleError(@schedule.ScheduleError::DecryptionFailed) =>
       e_dec = true
-    _ => fail("expected DecryptionFailed when removed member tries epoch-3 ciphertext")
+    _ =>
+      fail(
+        "expected DecryptionFailed when removed member tries epoch-3 ciphertext",
+      )
   }
   assert_true(e_dec)
   // 3. When Charlie processes the removal Commit, Charlie becomes inactive (MemberRemoved)
@@ -1566,7 +1595,8 @@ test "SEC-22: Removed member messages rejected by group and removed member canno
   assert_true(e_send_after)
   // Bob still decrypts Alice's epoch-3 secret cleanly
   assert_true(
-    bob.process_message(ep3_secret) is Application(0U, b"post-kick-secret", b"aad"),
+    bob.process_message(ep3_secret)
+    is Application(0U, b"post-kick-secret", b"aad"),
   )
 }
 
@@ -1601,9 +1631,7 @@ test "SEC-23: Self-removal (CannotRemoveSelf) and blank-leaf removal (BlankLeaf)
   // 4. RatchetTreeState::remove_leaf(1U) on blank leaf -> BlankLeaf(1U)
   let rt = @tree.RatchetTreeState::from_nodes(alice.ratchet_tree_nodes())
   let mut e_blank_tree = false
-  try {
-    rt.remove_leaf(1U)
-  } catch {
+  rt.remove_leaf(1U) catch {
     @tree.TreeError::BlankLeaf(1U) => e_blank_tree = true
     _ => fail("expected TreeError::BlankLeaf(1)")
   }
@@ -1689,7 +1717,7 @@ test "SEC-24: TLS codec malformed wire inputs (non-minimal varint, 0xC0 prefix, 
   // 6. Invalid optional presence byte (0x02)
   let mut e_opt = false
   try {
-    let _ = @tls.Reader::new(b"\x02").read_optional((r) => r.read_u8())
+    let _ = @tls.Reader::new(b"\x02").read_optional(r => r.read_u8())
   } catch {
     @tls.TlsError::InvalidEnum(_) => e_opt = true
     _ => fail("expected InvalidEnum on invalid optional tag")
@@ -1705,17 +1733,17 @@ test "SEC-25: X25519 low-order points (all-zero, u=1, order-8 points, p-1, p, p+
     // u = 0 (all-zero point)
     "0000000000000000000000000000000000000000000000000000000000000000",
     // u = 1 (order 4)
-    "0100000000000000000000000000000000000000000000000000000000000000",
+     "0100000000000000000000000000000000000000000000000000000000000000",
     // Order-8 point 1 (RFC 7748)
-    "e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800",
+     "e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800",
     // Order-8 point 2 (RFC 7748)
-    "5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f1157",
+     "5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f1157",
     // u = p - 1
-    "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+     "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
     // u = p
-    "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+     "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
     // u = p + 1
-    "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+     "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
   ]
   let cs1 = @cs.CipherSuite::X25519Aes128GcmSha256Ed25519
   let cs3 = @cs.CipherSuite::X25519ChaCha20Poly1305Sha256Ed25519
@@ -1745,17 +1773,17 @@ test "SEC-25: X25519 low-order points (all-zero, u=1, order-8 points, p-1, p, p+
 }
 
 ///|
-fn verify_fs_pcs_for_suite(
-  cs : @cs.CipherSuite,
-  seed : Bytes,
-) -> Unit raise {
+fn verify_fs_pcs_for_suite(cs : @cs.CipherSuite, seed : Bytes) -> Unit raise {
   let (alice, bob, alice_bundle, bob_bundle, welcome1, rng) = setup_two_member_group(
     cs, b"sec-26-gid", seed,
   )
   // Simulate full state compromise of Bob at epoch 1 by creating a second Bob
   // instance from the exact same epoch-1 Welcome (cloned epoch-1 state!)
   let bob_compromised_ep1 = @group.MlsGroup::from_welcome(
-    cs, welcome1, bob_bundle, None,
+    cs,
+    welcome1,
+    bob_bundle,
+    None,
   )
   ignore(alice_bundle)
   let auth_ep1 = alice.epoch_authenticator()
@@ -1800,7 +1828,8 @@ fn verify_fs_pcs_for_suite(
   // Compromised epoch-1 state CANNOT process Bob's post-update epoch-2 traffic
   let ep2_secret = alice.protect_application(b"pcs-healed-ep2", b"aad", rng)
   assert_true(
-    bob.process_message(ep2_secret) is Application(0U, b"pcs-healed-ep2", b"aad"),
+    bob.process_message(ep2_secret)
+    is Application(0U, b"pcs-healed-ep2", b"aad"),
   )
   // Even if attacker tries to follow out2.commit_msg with bob_compromised_ep1:
   // bob_compromised_ep1 does NOT have Bob's newly generated update private key -> MissingPrivateKey!
@@ -1863,7 +1892,9 @@ fn verify_fs_pcs_for_suite(
   assert_true(exp_ep4 != exp_ep3 && exp_ep4 != exp_ep2)
   // Post-removal secret is readable by Bob, unreadable by Charlie
   let ep4_msg = alice.protect_application(b"post-kick-pcs", b"", rng)
-  assert_true(bob.process_message(ep4_msg) is Application(0U, b"post-kick-pcs", b""))
+  assert_true(
+    bob.process_message(ep4_msg) is Application(0U, b"post-kick-pcs", b""),
+  )
   let ep4_spoofed : @types.PrivateMessage = {
     group_id: ep4_msg.group_id,
     epoch: 3UL,

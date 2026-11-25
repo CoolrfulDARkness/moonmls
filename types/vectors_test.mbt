@@ -1,7 +1,7 @@
 ///|
 /// Official IETF RFC 9420 `messages.json` test vector bundle (17 wire types).
 priv struct MessageVector {
-  index : Int
+  index : Int32
   mls_welcome : String
   mls_group_info : String
   mls_key_package : String

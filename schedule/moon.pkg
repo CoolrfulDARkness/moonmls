@@ -1,6 +1,6 @@
 import {
-  "CoolrfulDARkness/moonmls/tls" @tls,
-  "CoolrfulDARkness/moonmls/crypto" @crypto,
+  "CoolrfulDARkness/moonmls/tls",
+  "CoolrfulDARkness/moonmls/crypto",
   "CoolrfulDARkness/moonmls/ciphersuite" @cs,
-  "CoolrfulDARkness/moonmls/types" @types,
+  "CoolrfulDARkness/moonmls/types",
 }

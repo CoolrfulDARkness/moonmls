@@ -128,5 +128,5 @@ pub fn verify_and_decrypt_welcome(
     ) {
     raise ConfirmationTagMismatch
   }
-  { group_info, group_secrets, secrets }
+  { group_info, group_secrets, secrets, }
 }

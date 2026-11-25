@@ -1,0 +1,69 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "CoolrfulDARkness/moonmls/ciphersuite"
+
+import {
+  "CoolrfulDARkness/moonmls/crypto",
+  "CoolrfulDARkness/moonmls/tls",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn hpke_open_base(CipherSuite, Bytes, Bytes, Bytes, Bytes, Bytes) -> Bytes raise CsError
+
+pub fn hpke_seal_base(CipherSuite, Bytes, Bytes, Bytes, Bytes, @crypto.DeterministicRng) -> (Bytes, Bytes) raise CsError
+
+pub fn hpke_seal_base_with_ephemeral(CipherSuite, Bytes, Bytes, Bytes, Bytes, Bytes) -> (Bytes, Bytes) raise CsError
+
+pub fn kem_derive_key_pair(Bytes) -> (Bytes, Bytes) raise CsError
+
+// Errors
+#derive(Eq, @debug.Debug)
+pub(all) suberror CsError {
+  UnsupportedCipherSuite(UInt32)
+  CryptoError(@crypto.CryptoError)
+  TlsError(@tls.TlsError)
+  InvalidLength(String)
+  DecryptionFailed
+  VerificationFailed
+}
+pub impl Show for CsError
+
+// Types and methods
+#derive(Eq, @debug.Debug)
+pub(all) enum CipherSuite {
+  X25519Aes128GcmSha256Ed25519
+  X25519ChaCha20Poly1305Sha256Ed25519
+}
+pub fn CipherSuite::aead_id(Self) -> UInt32
+pub fn CipherSuite::aead_key_len(Self) -> Int32
+pub fn CipherSuite::aead_nonce_len(Self) -> Int32
+pub fn CipherSuite::aead_open(Self, Bytes, Bytes, Bytes, Bytes) -> Bytes raise CsError
+pub fn CipherSuite::aead_seal(Self, Bytes, Bytes, Bytes, Bytes) -> Bytes raise CsError
+pub fn CipherSuite::aead_tag_len(Self) -> Int32
+pub fn CipherSuite::decrypt_with_label(Self, Bytes, String, Bytes, Bytes, Bytes) -> Bytes raise CsError
+pub fn CipherSuite::derive_secret(Self, Bytes, String) -> Bytes raise CsError
+pub fn CipherSuite::derive_tree_secret(Self, Bytes, String, UInt32, Int32) -> Bytes raise CsError
+pub fn CipherSuite::encrypt_with_label(Self, Bytes, String, Bytes, Bytes, @crypto.DeterministicRng) -> (Bytes, Bytes) raise CsError
+pub fn CipherSuite::encrypt_with_label_deterministic(Self, Bytes, String, Bytes, Bytes, Bytes) -> (Bytes, Bytes) raise CsError
+pub fn CipherSuite::expand_with_label(Self, Bytes, String, Bytes, Int32) -> Bytes raise CsError
+pub fn CipherSuite::extract(Self, Bytes, Bytes) -> Bytes
+pub fn CipherSuite::from_id(UInt32) -> Self raise CsError
+pub fn CipherSuite::hash(Self, Bytes) -> Bytes
+pub fn CipherSuite::hash_len(Self) -> Int32
+pub fn CipherSuite::id(Self) -> UInt32
+pub fn CipherSuite::kem_keypair_from_ikm(Self, Bytes) -> (Bytes, Bytes) raise CsError
+pub fn CipherSuite::mac(Self, Bytes, Bytes) -> Bytes
+pub fn CipherSuite::make_key_package_ref(Self, Bytes) -> Bytes raise CsError
+pub fn CipherSuite::make_proposal_ref(Self, Bytes) -> Bytes raise CsError
+pub fn CipherSuite::ref_hash(Self, String, Bytes) -> Bytes raise CsError
+pub fn CipherSuite::secret_len(Self) -> Int32
+pub fn CipherSuite::sign_with_label(Self, Bytes, String, Bytes) -> Bytes raise CsError
+pub fn CipherSuite::signature_keypair_from_seed(Self, Bytes) -> (Bytes, Bytes) raise CsError
+pub fn CipherSuite::verify_mac(Self, Bytes, Bytes, Bytes) -> Bool
+pub fn CipherSuite::verify_with_label(Self, Bytes, String, Bytes, Bytes) -> Bool
+pub fn CipherSuite::zero_secret(Self) -> Bytes
+pub impl Show for CipherSuite
+
+// Type aliases
+
+// Traits

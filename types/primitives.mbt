@@ -1,83 +1,83 @@
 ///|
 /// MLS 1.0 protocol version identifier (`mls10 = 1`, RFC 9420 §6).
-pub const PROTOCOL_VERSION_MLS10 : UInt = 1U
+pub const PROTOCOL_VERSION_MLS10 : UInt32 = 1U
 
 ///|
 /// Cipher suite identifier (`uint16`, RFC 9420 §17.1).
-pub type CipherSuiteId = UInt
+pub type CipherSuiteId = UInt32
 
 ///|
 /// MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519 (`0x0001`).
-pub const CIPHER_SUITE_MLS_128_DHKEMX25519_AES128GCM_SHA256_ED25519 : UInt = 0x0001U
+pub const CIPHER_SUITE_MLS_128_DHKEMX25519_AES128GCM_SHA256_ED25519 : UInt32 = 0x0001U
 
 ///|
 /// MLS_128_DHKEMP256_AES128GCM_SHA256_P256 (`0x0002`).
-pub const CIPHER_SUITE_MLS_128_DHKEMP256_AES128GCM_SHA256_P256 : UInt = 0x0002U
+pub const CIPHER_SUITE_MLS_128_DHKEMP256_AES128GCM_SHA256_P256 : UInt32 = 0x0002U
 
 ///|
 /// MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_Ed25519 (`0x0003`).
-pub const CIPHER_SUITE_MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_ED25519 : UInt = 0x0003U
+pub const CIPHER_SUITE_MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_ED25519 : UInt32 = 0x0003U
 
 ///|
 /// MLS_256_DHKEMX448_AES256GCM_SHA512_Ed448 (`0x0004`).
-pub const CIPHER_SUITE_MLS_256_DHKEMX448_AES256GCM_SHA512_ED448 : UInt = 0x0004U
+pub const CIPHER_SUITE_MLS_256_DHKEMX448_AES256GCM_SHA512_ED448 : UInt32 = 0x0004U
 
 ///|
 /// MLS_256_DHKEMP521_AES256GCM_SHA512_P521 (`0x0005`).
-pub const CIPHER_SUITE_MLS_256_DHKEMP521_AES256GCM_SHA512_P521 : UInt = 0x0005U
+pub const CIPHER_SUITE_MLS_256_DHKEMP521_AES256GCM_SHA512_P521 : UInt32 = 0x0005U
 
 ///|
 /// MLS_256_DHKEMX448_CHACHA20POLY1305_SHA512_Ed448 (`0x0006`).
-pub const CIPHER_SUITE_MLS_256_DHKEMX448_CHACHA20POLY1305_SHA512_ED448 : UInt = 0x0006U
+pub const CIPHER_SUITE_MLS_256_DHKEMX448_CHACHA20POLY1305_SHA512_ED448 : UInt32 = 0x0006U
 
 ///|
 /// MLS_256_DHKEMP384_AES256GCM_SHA384_P384 (`0x0007`).
-pub const CIPHER_SUITE_MLS_256_DHKEMP384_AES256GCM_SHA384_P384 : UInt = 0x0007U
+pub const CIPHER_SUITE_MLS_256_DHKEMP384_AES256GCM_SHA384_P384 : UInt32 = 0x0007U
 
 ///|
 /// Standard RFC 9420 §17.3 extension type constants.
-pub const EXT_APPLICATION_ID : UInt = 1U
+pub const EXT_APPLICATION_ID : UInt32 = 1U
 
 ///|
-pub const EXT_RATCHET_TREE : UInt = 2U
+pub const EXT_RATCHET_TREE : UInt32 = 2U
 
 ///|
-pub const EXT_REQUIRED_CAPABILITIES : UInt = 3U
+pub const EXT_REQUIRED_CAPABILITIES : UInt32 = 3U
 
 ///|
-pub const EXT_EXTERNAL_PUB : UInt = 4U
+pub const EXT_EXTERNAL_PUB : UInt32 = 4U
 
 ///|
-pub const EXT_EXTERNAL_SENDERS : UInt = 5U
+pub const EXT_EXTERNAL_SENDERS : UInt32 = 5U
 
 ///|
 /// Standard RFC 9420 §5.3 credential type constants.
-pub const CREDENTIAL_TYPE_BASIC : UInt = 1U
+pub const CREDENTIAL_TYPE_BASIC : UInt32 = 1U
 
 ///|
-pub const CREDENTIAL_TYPE_X509 : UInt = 2U
+pub const CREDENTIAL_TYPE_X509 : UInt32 = 2U
 
 ///|
 /// Standard RFC 9420 §12.1 proposal type constants.
-pub const PROPOSAL_TYPE_ADD : UInt = 1U
+pub const PROPOSAL_TYPE_ADD : UInt32 = 1U
 
 ///|
-pub const PROPOSAL_TYPE_UPDATE : UInt = 2U
+pub const PROPOSAL_TYPE_UPDATE : UInt32 = 2U
 
 ///|
-pub const PROPOSAL_TYPE_REMOVE : UInt = 3U
+pub const PROPOSAL_TYPE_REMOVE : UInt32 = 3U
 
 ///|
-pub const PROPOSAL_TYPE_PSK : UInt = 4U
+pub const PROPOSAL_TYPE_PSK : UInt32 = 4U
 
 ///|
-pub const PROPOSAL_TYPE_REINIT : UInt = 5U
+pub const PROPOSAL_TYPE_REINIT : UInt32 = 5U
 
 ///|
-pub const PROPOSAL_TYPE_EXTERNAL_INIT : UInt = 6U
+pub const PROPOSAL_TYPE_EXTERNAL_INIT : UInt32 = 6U
 
 ///|
-pub const PROPOSAL_TYPE_GROUP_CONTEXT_EXTENSIONS : UInt = 7U
+pub const PROPOSAL_TYPE_GROUP_CONTEXT_EXTENSIONS : UInt32 = 7U
 
 ///|
 /// MLS protocol version (`uint16`, RFC 9420 §6).
@@ -87,7 +87,7 @@ pub(all) enum ProtocolVersion {
 }
 
 ///|
-pub fn ProtocolVersion::to_u16(self : ProtocolVersion) -> UInt {
+pub fn ProtocolVersion::to_u16(self : ProtocolVersion) -> UInt32 {
   match self {
     Mls10 => PROTOCOL_VERSION_MLS10
   }
@@ -95,7 +95,7 @@ pub fn ProtocolVersion::to_u16(self : ProtocolVersion) -> UInt {
 
 ///|
 pub fn ProtocolVersion::from_u16(
-  value : UInt,
+  value : UInt32,
 ) -> ProtocolVersion raise @tls.TlsError {
   match value {
     1U => Mls10
@@ -104,10 +104,7 @@ pub fn ProtocolVersion::from_u16(
 }
 
 ///|
-pub fn ProtocolVersion::encode(
-  self : ProtocolVersion,
-  w : @tls.Writer,
-) -> Unit {
+pub fn ProtocolVersion::encode(self : ProtocolVersion, w : @tls.Writer) -> Unit {
   w.write_u16(self.to_u16())
 }
 
@@ -147,7 +144,7 @@ pub(all) enum WireFormat {
 }
 
 ///|
-pub fn WireFormat::to_u16(self : WireFormat) -> UInt {
+pub fn WireFormat::to_u16(self : WireFormat) -> UInt32 {
   match self {
     MlsPublicMessage => 1U
     MlsPrivateMessage => 2U
@@ -158,7 +155,7 @@ pub fn WireFormat::to_u16(self : WireFormat) -> UInt {
 }
 
 ///|
-pub fn WireFormat::from_u16(value : UInt) -> WireFormat raise @tls.TlsError {
+pub fn WireFormat::from_u16(value : UInt32) -> WireFormat raise @tls.TlsError {
   match value {
     1U => MlsPublicMessage
     2U => MlsPrivateMessage
@@ -310,7 +307,7 @@ pub fn LeafNodeSource::from_bytes(
 /// Generic MLS extension (`Extension`, RFC 9420 §13.4).
 #derive(Eq, Debug)
 pub(all) struct Extension {
-  extension_type : UInt
+  extension_type : UInt32
   extension_data : Bytes
 }
 
@@ -334,7 +331,7 @@ pub fn Extension::to_bytes(self : Extension) -> Bytes raise @tls.TlsError {
 pub fn Extension::decode(r : @tls.Reader) -> Extension raise @tls.TlsError {
   let extension_type = r.read_u16()
   let extension_data = r.read_opaque()
-  { extension_type, extension_data }
+  { extension_type, extension_data, }
 }
 
 ///|
@@ -364,7 +361,7 @@ fn decode_extensions(r : @tls.Reader) -> Array[Extension] raise @tls.TlsError {
 
 ///|
 fn encode_u16_vec(
-  items : Array[UInt],
+  items : Array[UInt32],
   w : @tls.Writer,
 ) -> Unit raise @tls.TlsError {
   w.write_vec(sub => {
@@ -375,13 +372,13 @@ fn encode_u16_vec(
 }
 
 ///|
-fn decode_u16_vec(r : @tls.Reader) -> Array[UInt] raise @tls.TlsError {
+fn decode_u16_vec(r : @tls.Reader) -> Array[UInt32] raise @tls.TlsError {
   r.read_vec(sub => sub.read_u16())
 }
 
 ///|
 fn encode_u32_vec(
-  items : Array[UInt],
+  items : Array[UInt32],
   w : @tls.Writer,
 ) -> Unit raise @tls.TlsError {
   w.write_vec(sub => {
@@ -392,7 +389,7 @@ fn encode_u32_vec(
 }
 
 ///|
-fn decode_u32_vec(r : @tls.Reader) -> Array[UInt] raise @tls.TlsError {
+fn decode_u32_vec(r : @tls.Reader) -> Array[UInt32] raise @tls.TlsError {
   r.read_vec(sub => sub.read_u32())
 }
 
@@ -405,7 +402,7 @@ pub(all) enum Credential {
 }
 
 ///|
-pub fn Credential::credential_type(self : Credential) -> UInt {
+pub fn Credential::credential_type(self : Credential) -> UInt32 {
   match self {
     Basic(_) => CREDENTIAL_TYPE_BASIC
     X509(_) => CREDENTIAL_TYPE_X509
@@ -465,11 +462,11 @@ pub fn Credential::from_bytes(b : Bytes) -> Credential raise @tls.TlsError {
 /// Supported MLS capabilities advertised in a `LeafNode` (RFC 9420 §7.2).
 #derive(Eq, Debug)
 pub(all) struct Capabilities {
-  versions : Array[UInt]
-  cipher_suites : Array[UInt]
-  extensions : Array[UInt]
-  proposals : Array[UInt]
-  credentials : Array[UInt]
+  versions : Array[UInt32]
+  cipher_suites : Array[UInt32]
+  extensions : Array[UInt32]
+  proposals : Array[UInt32]
+  credentials : Array[UInt32]
 }
 
 ///|
@@ -500,7 +497,7 @@ pub fn Capabilities::decode(
   let extensions = decode_u16_vec(r)
   let proposals = decode_u16_vec(r)
   let credentials = decode_u16_vec(r)
-  { versions, cipher_suites, extensions, proposals, credentials }
+  { versions, cipher_suites, extensions, proposals, credentials, }
 }
 
 ///|
@@ -536,7 +533,7 @@ pub fn Lifetime::to_bytes(self : Lifetime) -> Bytes {
 pub fn Lifetime::decode(r : @tls.Reader) -> Lifetime raise @tls.TlsError {
   let not_before = r.read_u64()
   let not_after = r.read_u64()
-  { not_before, not_after }
+  { not_before, not_after, }
 }
 
 ///|

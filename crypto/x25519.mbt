@@ -72,6 +72,12 @@ pub fn x25519_dh(scalar : Bytes, u_coord : Bytes) -> Bytes raise CryptoError {
 
 ///|
 pub fn x25519_public_key(private_key : Bytes) -> Bytes raise CryptoError {
-  let basepoint = Bytes::makei(32, fn(i) { if i == 0 { b'\x09' } else { b'\x00' } })
+  let basepoint = Bytes::makei(32, fn(i) {
+    if i == 0 {
+      b'\x09'
+    } else {
+      b'\x00'
+    }
+  })
   x25519(private_key, basepoint)
 }

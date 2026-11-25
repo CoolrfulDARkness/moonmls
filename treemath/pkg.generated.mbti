@@ -1,0 +1,43 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "CoolrfulDARkness/moonmls/treemath"
+
+// Values
+pub fn common_ancestor(UInt32, UInt32) -> UInt32
+
+pub fn copath(UInt32, UInt32) -> Array[UInt32]
+
+pub fn direct_path(UInt32, UInt32) -> Array[UInt32]
+
+pub fn is_leaf(UInt32) -> Bool
+
+pub fn leaf_count(UInt32) -> UInt32
+
+pub fn leaf_to_node(UInt32) -> UInt32
+
+pub fn left(UInt32) -> UInt32?
+
+pub fn level(UInt32) -> UInt32
+
+pub fn log2(UInt32) -> UInt32
+
+pub fn node_to_leaf(UInt32) -> UInt32?
+
+pub fn node_width(UInt32) -> UInt32
+
+pub fn parent(UInt32, UInt32) -> UInt32?
+
+pub fn right(UInt32) -> UInt32?
+
+pub fn root(UInt32) -> UInt32
+
+pub fn sibling(UInt32, UInt32) -> UInt32?
+
+pub fn subtree_range(UInt32) -> (UInt32, UInt32)
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

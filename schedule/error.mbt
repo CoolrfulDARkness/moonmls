@@ -18,7 +18,7 @@ pub(all) suberror ScheduleError {
 }
 
 ///|
-pub impl Show for ScheduleError with output(self, logger) {
+pub impl Show for ScheduleError with fn output(self, logger) {
   match self {
     CsError(err) => {
       logger.write_string("CsError(")

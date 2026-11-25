@@ -4,7 +4,7 @@ fn hex_bytes(s : String) -> Bytes raise {
 }
 
 ///|
-fn flip_byte(data : Bytes, idx : Int) -> Bytes {
+fn flip_byte(data : Bytes, idx : Int32) -> Bytes {
   Bytes::makei(data.length(), fn(i) {
     if i == idx {
       (data[i].to_int() ^ 0x01).to_byte()
@@ -41,7 +41,10 @@ fn sample_group_context(cs : @cs.CipherSuite) -> @types.GroupContext raise {
 
 ///|
 fn sample_commit() -> @types.Commit {
-  { proposals: [@types.ProposalOrRef::Reference(Bytes::make(32, b'\xaa'))], path: None }
+  {
+    proposals: [@types.ProposalOrRef::Reference(Bytes::make(32, b'\xaa'))],
+    path: None,
+  }
 }
 
 ///|
@@ -123,7 +126,11 @@ test "PSK secret derivation with External and Resumption PSKs" {
 
 ///|
 test "Key schedule welcome key/nonce and joiner equivalence" {
-  for cs in [@cs.X25519Aes128GcmSha256Ed25519, @cs.X25519ChaCha20Poly1305Sha256Ed25519] {
+  for
+    cs in [
+      @cs.X25519Aes128GcmSha256Ed25519,
+      @cs.X25519ChaCha20Poly1305Sha256Ed25519,
+    ] {
     let prev_init = Bytes::make(32, b'\x10')
     let commit_sec = Bytes::make(32, b'\x20')
     let psk_sec = Bytes::make(32, b'\x30')
@@ -220,21 +227,23 @@ test "Transcript hash and confirmation/membership tags" {
       epoch: gc.epoch,
       sender: @types.Sender::Member(0U),
       authenticated_data: b"",
-      content: @types.FramedContentBody::Proposal(
-        @types.Proposal::Remove(2U),
-      ),
+      content: @types.FramedContentBody::Proposal(@types.Proposal::Remove(2U)),
     },
     signature: Bytes::make(64, b'\x55'),
   }
   assert_schedule_err(
-    () => { @schedule.compute_confirmed_transcript_hash(cs, interim, prop_input) },
+    () => @schedule.compute_confirmed_transcript_hash(cs, interim, prop_input),
     @schedule.UnexpectedContentType,
   )
 }
 
 ///|
 test "PublicMessage protection roundtrip and security checks" {
-  for cs in [@cs.X25519Aes128GcmSha256Ed25519, @cs.X25519ChaCha20Poly1305Sha256Ed25519] {
+  for
+    cs in [
+      @cs.X25519Aes128GcmSha256Ed25519,
+      @cs.X25519ChaCha20Poly1305Sha256Ed25519,
+    ] {
     let (sign_priv, sign_pub) = cs.signature_keypair_from_seed(
       Bytes::make(32, b'\x42'),
     )
@@ -473,7 +482,11 @@ test "PublicMessage protection roundtrip and security checks" {
 
 ///|
 test "PrivateMessage encryption/decryption roundtrip and tamper rejection" {
-  for cs in [@cs.X25519Aes128GcmSha256Ed25519, @cs.X25519ChaCha20Poly1305Sha256Ed25519] {
+  for
+    cs in [
+      @cs.X25519Aes128GcmSha256Ed25519,
+      @cs.X25519ChaCha20Poly1305Sha256Ed25519,
+    ] {
     let (sign_priv, sign_pub) = cs.signature_keypair_from_seed(
       Bytes::make(32, b'\x33'),
     )
@@ -523,9 +536,7 @@ test "PrivateMessage encryption/decryption roundtrip and tamper rejection" {
 
     // Short ciphertext (< 32B) in derive_sender_data_key_nonce
     let (sk_short, sn_short) = @schedule.derive_sender_data_key_nonce(
-      cs,
-      sender_data_secret,
-      b"short",
+      cs, sender_data_secret, b"short",
     )
     assert_eq(sk_short.length(), cs.aead_key_len())
     assert_eq(sn_short.length(), cs.aead_nonce_len())
@@ -549,7 +560,7 @@ test "PrivateMessage encryption/decryption roundtrip and tamper rejection" {
     )
     // Changing ciphertext also changes ciphertext_sample so decrypt_sender_data fails
     assert_schedule_err(
-      () => { @schedule.decrypt_sender_data(cs, sender_data_secret, bad_ct) },
+      () => @schedule.decrypt_sender_data(cs, sender_data_secret, bad_ct),
       @schedule.DecryptionFailed,
     )
 
@@ -643,7 +654,10 @@ test "PrivateMessage encryption/decryption roundtrip and tamper rejection" {
       )
     catch {
       @schedule.TlsError(@tls.InvalidEnum(_)) => ()
-      other => fail("expected TlsError(InvalidEnum) for non-zero padding, got \{other}")
+      other =>
+        fail(
+          "expected TlsError(InvalidEnum) for non-zero padding, got \{other}",
+        )
     } noraise {
       _ => fail("expected non-zero padding to be rejected")
     }

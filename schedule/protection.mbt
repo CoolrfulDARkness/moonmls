@@ -18,12 +18,7 @@ fn build_framed_content_tbs(
       }
     External(_) | NewMemberProposal => None
   }
-  {
-    version: @types.PROTOCOL_VERSION_MLS10,
-    wire_format,
-    content,
-    context,
-  }
+  { version: @types.PROTOCOL_VERSION_MLS10, wire_format, content, context, }
 }
 
 ///|
@@ -33,10 +28,7 @@ fn validate_confirmation_tag_presence(
   confirmation_tag : Bytes?,
 ) -> Unit raise ScheduleError {
   match content_type {
-    Commit =>
-      if confirmation_tag is None {
-        raise InvalidConfirmationTag
-      }
+    Commit => if confirmation_tag is None { raise InvalidConfirmationTag }
     Application | Proposal =>
       if confirmation_tag is Some(_) {
         raise InvalidConfirmationTag
@@ -78,10 +70,8 @@ pub fn sign_framed_content(
   group_context : @types.GroupContext?,
 ) -> Bytes raise ScheduleError {
   let tbs = build_framed_content_tbs(wire_format, content, group_context)
-  let tbs_bytes = try tbs.to_bytes() catch {
-    e => raise TlsError(e)
-  }
-  try cs.sign_with_label(sign_priv, "FramedContentTBS", tbs_bytes) catch {
+  let tbs_bytes = tbs.to_bytes() catch { e => raise TlsError(e) }
+  cs.sign_with_label(sign_priv, "FramedContentTBS", tbs_bytes) catch {
     e => raise map_cs_error(e)
   }
 }
@@ -97,12 +87,10 @@ pub fn verify_framed_content(
   group_context : @types.GroupContext?,
   signature : Bytes,
 ) -> Bool {
-  let tbs = try build_framed_content_tbs(wire_format, content, group_context) catch {
+  let tbs = build_framed_content_tbs(wire_format, content, group_context) catch {
     _ => return false
   }
-  let tbs_bytes = try tbs.to_bytes() catch {
-    _ => return false
-  }
+  let tbs_bytes = tbs.to_bytes() catch { _ => return false }
   cs.verify_with_label(sign_pub, "FramedContentTBS", tbs_bytes, signature)
 }
 
@@ -130,25 +118,21 @@ pub fn protect_public_message(
     content,
     group_context,
   )
-  let tbs_bytes = try tbs.to_bytes() catch {
-    e => raise TlsError(e)
-  }
-  let signature = try
-    cs.sign_with_label(sign_priv, "FramedContentTBS", tbs_bytes)
-  catch {
+  let tbs_bytes = tbs.to_bytes() catch { e => raise TlsError(e) }
+  let signature = cs.sign_with_label(sign_priv, "FramedContentTBS", tbs_bytes) catch {
     e => raise map_cs_error(e)
   }
-  let auth : @types.FramedContentAuthData = { signature, confirmation_tag }
+  let auth : @types.FramedContentAuthData = { signature, confirmation_tag, }
   let membership_tag : Bytes? = match content.sender {
     Member(_) =>
       match membership_key {
         Some(mk) =>
-          Some(compute_membership_tag(cs, mk, { content_tbs: tbs, auth }))
+          Some(compute_membership_tag(cs, mk, { content_tbs: tbs, auth, }))
         None => raise MissingMembershipKey
       }
     External(_) | NewMemberProposal | NewMemberCommit => None
   }
-  { content, auth, membership_tag }
+  { content, auth, membership_tag, }
 }
 
 ///|
@@ -183,7 +167,12 @@ pub fn unprotect_public_message(
         Some(t) => t
         None => raise InvalidMembershipTag
       }
-      if !verify_membership_tag(cs, mk, { content_tbs: tbs, auth: msg.auth }, tag) {
+      if !verify_membership_tag(
+          cs,
+          mk,
+          { content_tbs: tbs, auth: msg.auth, },
+          tag,
+        ) {
         raise InvalidMembershipTag
       }
     }
@@ -192,15 +181,13 @@ pub fn unprotect_public_message(
         raise InvalidMembershipTag
       }
   }
-  let tbs_bytes = try tbs.to_bytes() catch {
-    e => raise TlsError(e)
-  }
+  let tbs_bytes = tbs.to_bytes() catch { e => raise TlsError(e) }
   if !cs.verify_with_label(
-    sign_pub,
-    "FramedContentTBS",
-    tbs_bytes,
-    msg.auth.signature,
-  ) {
+      sign_pub,
+      "FramedContentTBS",
+      tbs_bytes,
+      msg.auth.signature,
+    ) {
     raise InvalidSignature
   }
   {
@@ -225,22 +212,23 @@ pub fn derive_sender_data_key_nonce(
   } else {
     nh
   }
-  let sample = try @tls.bytes_slice(ciphertext, 0, sample_len) catch {
+  let sample = @tls.bytes_slice(ciphertext, 0, sample_len) catch {
     e => raise TlsError(e)
   }
-  let key = try
-    cs.expand_with_label(sender_data_secret, "key", sample, cs.aead_key_len())
-  catch {
+  let key = cs.expand_with_label(
+    sender_data_secret,
+    "key",
+    sample,
+    cs.aead_key_len(),
+  ) catch {
     e => raise map_cs_error(e)
   }
-  let nonce = try
-    cs.expand_with_label(
-      sender_data_secret,
-      "nonce",
-      sample,
-      cs.aead_nonce_len(),
-    )
-  catch {
+  let nonce = cs.expand_with_label(
+    sender_data_secret,
+    "nonce",
+    sample,
+    cs.aead_nonce_len(),
+  ) catch {
     e => raise map_cs_error(e)
   }
   (key, nonce)
@@ -258,7 +246,7 @@ pub fn encrypt_private_message_with_keys(
   content_nonce : Bytes,
   content : @types.FramedContent,
   auth : @types.FramedContentAuthData,
-  padding_len : Int,
+  padding_len : Int32,
 ) -> @types.PrivateMessage raise ScheduleError {
   match content.sender {
     Member(_) => ()
@@ -266,27 +254,29 @@ pub fn encrypt_private_message_with_keys(
   }
   let content_type = content.content.content_type()
   validate_confirmation_tag_presence(content_type, auth.confirmation_tag)
-  let xored_nonce = apply_reuse_guard(cs, content_nonce, sender_data.reuse_guard)
+  let xored_nonce = apply_reuse_guard(
+    cs,
+    content_nonce,
+    sender_data.reuse_guard,
+  )
   let pmc : @types.PrivateMessageContent = {
     content: content.content,
     auth,
     padding_len,
   }
-  let plaintext = try pmc.to_bytes() catch {
-    e => raise TlsError(e)
-  }
+  let plaintext = pmc.to_bytes() catch { e => raise TlsError(e) }
   let content_aad_struct : @types.PrivateContentAad = {
     group_id: content.group_id,
     epoch: content.epoch,
     content_type,
     authenticated_data: content.authenticated_data,
   }
-  let content_aad = try content_aad_struct.to_bytes() catch {
+  let content_aad = content_aad_struct.to_bytes() catch {
     e => raise TlsError(e)
   }
-  let ciphertext = try
-    cs.aead_seal(content_key, xored_nonce, content_aad, plaintext)
-  catch {
+  let ciphertext = cs.aead_seal(
+    content_key, xored_nonce, content_aad, plaintext,
+  ) catch {
     e => raise map_cs_error(e)
   }
   let (sd_key, sd_nonce) = derive_sender_data_key_nonce(
@@ -297,15 +287,9 @@ pub fn encrypt_private_message_with_keys(
     epoch: content.epoch,
     content_type,
   }
-  let sd_aad = try sd_aad_struct.to_bytes() catch {
-    e => raise TlsError(e)
-  }
-  let sd_plain = try sender_data.to_bytes() catch {
-    e => raise TlsError(e)
-  }
-  let encrypted_sender_data = try
-    cs.aead_seal(sd_key, sd_nonce, sd_aad, sd_plain)
-  catch {
+  let sd_aad = sd_aad_struct.to_bytes() catch { e => raise TlsError(e) }
+  let sd_plain = sender_data.to_bytes() catch { e => raise TlsError(e) }
+  let encrypted_sender_data = cs.aead_seal(sd_key, sd_nonce, sd_aad, sd_plain) catch {
     e => raise map_cs_error(e)
   }
   {
@@ -336,15 +320,16 @@ pub fn decrypt_sender_data(
     epoch: msg.epoch,
     content_type: msg.content_type,
   }
-  let sd_aad = try sd_aad_struct.to_bytes() catch {
-    e => raise TlsError(e)
-  }
-  let sd_plain = try
-    cs.aead_open(sd_key, sd_nonce, sd_aad, msg.encrypted_sender_data)
-  catch {
+  let sd_aad = sd_aad_struct.to_bytes() catch { e => raise TlsError(e) }
+  let sd_plain = cs.aead_open(
+    sd_key,
+    sd_nonce,
+    sd_aad,
+    msg.encrypted_sender_data,
+  ) catch {
     e => raise map_cs_error(e)
   }
-  try @types.MlsSenderData::from_bytes(sd_plain) catch {
+  @types.MlsSenderData::from_bytes(sd_plain) catch {
     e => raise TlsError(e)
   }
 }
@@ -362,24 +347,32 @@ pub fn decrypt_private_message_with_keys(
   content_nonce : Bytes,
   msg : @types.PrivateMessage,
 ) -> @types.AuthenticatedContent raise ScheduleError {
-  let xored_nonce = apply_reuse_guard(cs, content_nonce, sender_data.reuse_guard)
+  let xored_nonce = apply_reuse_guard(
+    cs,
+    content_nonce,
+    sender_data.reuse_guard,
+  )
   let content_aad_struct : @types.PrivateContentAad = {
     group_id: msg.group_id,
     epoch: msg.epoch,
     content_type: msg.content_type,
     authenticated_data: msg.authenticated_data,
   }
-  let content_aad = try content_aad_struct.to_bytes() catch {
+  let content_aad = content_aad_struct.to_bytes() catch {
     e => raise TlsError(e)
   }
-  let plaintext = try
-    cs.aead_open(content_key, xored_nonce, content_aad, msg.ciphertext)
-  catch {
+  let plaintext = cs.aead_open(
+    content_key,
+    xored_nonce,
+    content_aad,
+    msg.ciphertext,
+  ) catch {
     e => raise map_cs_error(e)
   }
-  let pmc = try
-    @types.PrivateMessageContent::from_bytes(plaintext, msg.content_type)
-  catch {
+  let pmc = @types.PrivateMessageContent::from_bytes(
+    plaintext,
+    msg.content_type,
+  ) catch {
     e => raise TlsError(e)
   }
   let content : @types.FramedContent = {
@@ -390,13 +383,13 @@ pub fn decrypt_private_message_with_keys(
     content: pmc.content,
   }
   if !verify_framed_content(
-    cs,
-    sign_pub,
-    @types.WireFormat::MlsPrivateMessage,
-    content,
-    Some(group_context),
-    pmc.auth.signature,
-  ) {
+      cs,
+      sign_pub,
+      @types.WireFormat::MlsPrivateMessage,
+      content,
+      Some(group_context),
+      pmc.auth.signature,
+    ) {
     raise InvalidSignature
   }
   {

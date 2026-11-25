@@ -1,4 +1,4 @@
 import {
-  "CoolrfulDARkness/moonmls/tls" @tls,
-  "CoolrfulDARkness/moonmls/crypto" @crypto,
+  "CoolrfulDARkness/moonmls/tls",
+  "CoolrfulDARkness/moonmls/crypto",
 }

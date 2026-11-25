@@ -2,8 +2,8 @@
 /// Unsigned body of a `KeyPackage` (`KeyPackageTBS`, RFC 9420 §10).
 #derive(Eq, Debug)
 pub(all) struct KeyPackageTbs {
-  version : UInt
-  cipher_suite : UInt
+  version : UInt32
+  cipher_suite : UInt32
   init_key : Bytes
   leaf_node : LeafNode
   extensions : Array[Extension]
@@ -39,7 +39,7 @@ pub fn KeyPackageTbs::decode(
   let init_key = r.read_opaque()
   let leaf_node = LeafNode::decode(r)
   let extensions = decode_extensions(r)
-  { version, cipher_suite, init_key, leaf_node, extensions }
+  { version, cipher_suite, init_key, leaf_node, extensions, }
 }
 
 ///|
@@ -56,8 +56,8 @@ pub fn KeyPackageTbs::from_bytes(
 /// Signed `KeyPackage` (RFC 9420 §10).
 #derive(Eq, Debug)
 pub(all) struct KeyPackage {
-  version : UInt
-  cipher_suite : UInt
+  version : UInt32
+  cipher_suite : UInt32
   init_key : Bytes
   leaf_node : LeafNode
   extensions : Array[Extension]
@@ -122,8 +122,8 @@ pub fn KeyPackage::from_bytes(b : Bytes) -> KeyPackage raise @tls.TlsError {
 /// Group state summary (`GroupContext`, RFC 9420 §8.1).
 #derive(Eq, Debug)
 pub(all) struct GroupContext {
-  version : UInt
-  cipher_suite : UInt
+  version : UInt32
+  cipher_suite : UInt32
   group_id : Bytes
   epoch : UInt64
   tree_hash : Bytes
@@ -189,7 +189,7 @@ pub(all) struct GroupInfoTbs {
   group_context : GroupContext
   extensions : Array[Extension]
   confirmation_tag : Bytes
-  signer : UInt
+  signer : UInt32
 }
 
 ///|
@@ -218,7 +218,7 @@ pub fn GroupInfoTbs::decode(
   let extensions = decode_extensions(r)
   let confirmation_tag = r.read_opaque()
   let signer = r.read_u32()
-  { group_context, extensions, confirmation_tag, signer }
+  { group_context, extensions, confirmation_tag, signer, }
 }
 
 ///|
@@ -236,7 +236,7 @@ pub(all) struct GroupInfo {
   group_context : GroupContext
   extensions : Array[Extension]
   confirmation_tag : Bytes
-  signer : UInt
+  signer : UInt32
   signature : Bytes
 }
 
@@ -329,7 +329,7 @@ pub fn GroupSecrets::decode(
   let joiner_secret = r.read_opaque()
   let path_secret = r.read_optional(sub => sub.read_opaque())
   let psks = r.read_vec(sub => PreSharedKeyId::decode(sub))
-  { joiner_secret, path_secret, psks }
+  { joiner_secret, path_secret, psks, }
 }
 
 ///|
@@ -372,7 +372,7 @@ pub fn EncryptedGroupSecrets::decode(
 ) -> EncryptedGroupSecrets raise @tls.TlsError {
   let new_member = r.read_opaque()
   let encrypted_group_secrets = HpkeCiphertext::decode(r)
-  { new_member, encrypted_group_secrets }
+  { new_member, encrypted_group_secrets, }
 }
 
 ///|
@@ -389,7 +389,7 @@ pub fn EncryptedGroupSecrets::from_bytes(
 /// Group invitation message (`Welcome`, RFC 9420 §12.4.3.1).
 #derive(Eq, Debug)
 pub(all) struct Welcome {
-  cipher_suite : UInt
+  cipher_suite : UInt32
   secrets : Array[EncryptedGroupSecrets]
   encrypted_group_info : Bytes
 }
@@ -420,7 +420,7 @@ pub fn Welcome::decode(r : @tls.Reader) -> Welcome raise @tls.TlsError {
   let cipher_suite = r.read_u16()
   let secrets = r.read_vec(sub => EncryptedGroupSecrets::decode(sub))
   let encrypted_group_info = r.read_opaque()
-  { cipher_suite, secrets, encrypted_group_info }
+  { cipher_suite, secrets, encrypted_group_info, }
 }
 
 ///|

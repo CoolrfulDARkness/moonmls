@@ -31,10 +31,7 @@ test "primitives u8 u16 u32 u64 raw roundtrip" {
   w.write_raw(b"\xCA\xFE\xBA\xBE")
   assert_eq(w.len(), 1 + 2 + 4 + 8 + 4)
   let bytes = w.to_bytes()
-  assert_eq(
-    @tls.bytes_to_hex(bytes),
-    "ab1234deadbeef0102030405060708cafebabe",
-  )
+  assert_eq(@tls.bytes_to_hex(bytes), "ab1234deadbeef0102030405060708cafebabe")
   let r = @tls.Reader::new(bytes)
   assert_eq(r.offset(), 0)
   assert_eq(r.remaining(), 19)
@@ -69,7 +66,7 @@ test "u64 high-bit and max boundary roundtrip" {
 
 ///|
 test "varint boundary values RFC 9420 2.1.2" {
-  let cases : Array[(Int, String)] = [
+  let cases : Array[(Int32, String)] = [
     (0, "00"),
     (1, "01"),
     (63, "3f"),
@@ -191,7 +188,7 @@ test "opaque encode and decode roundtrip" {
 
 ///|
 test "write_vec and read_vec roundtrip and error cases" {
-  let nums : Array[UInt] = [0x0001U, 0x0203U, 0xFFFFU]
+  let nums : Array[UInt32] = [0x0001U, 0x0203U, 0xFFFFU]
   let w = @tls.Writer::new()
   w.write_vec(sub => {
     for i = 0; i < nums.length(); i = i + 1 {
@@ -216,16 +213,14 @@ test "write_vec and read_vec roundtrip and error cases" {
     r_bad.read_vec(sub => sub.read_u16())
   })
   let r_nop = @tls.Reader::new(b"\x01\xAA")
-  assert_tls_err(@tls.TlsError::LengthMismatch, () => {
-    r_nop.read_vec(_sub => 0)
-  })
+  assert_tls_err(@tls.TlsError::LengthMismatch, () => r_nop.read_vec(_sub => 0))
 }
 
 ///|
 test "write_optional and read_optional roundtrip and invalid tag" {
   let w = @tls.Writer::new()
-  let none_val : UInt? = None
-  let some_val : UInt? = Some(0x12345678U)
+  let none_val : UInt32? = None
+  let some_val : UInt32? = Some(0x12345678U)
   w.write_optional(none_val, (wr, v) => wr.write_u32(v))
   w.write_optional(some_val, (wr, v) => wr.write_u32(v))
   assert_eq(@tls.bytes_to_hex(w.to_bytes()), "000112345678")

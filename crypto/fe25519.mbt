@@ -14,17 +14,50 @@ priv struct Fe {
 
 ///|
 fn fe_zero() -> Fe {
-  { h0: 0L, h1: 0L, h2: 0L, h3: 0L, h4: 0L, h5: 0L, h6: 0L, h7: 0L, h8: 0L, h9: 0L }
+  {
+    h0: 0L,
+    h1: 0L,
+    h2: 0L,
+    h3: 0L,
+    h4: 0L,
+    h5: 0L,
+    h6: 0L,
+    h7: 0L,
+    h8: 0L,
+    h9: 0L,
+  }
 }
 
 ///|
 fn fe_one() -> Fe {
-  { h0: 1L, h1: 0L, h2: 0L, h3: 0L, h4: 0L, h5: 0L, h6: 0L, h7: 0L, h8: 0L, h9: 0L }
+  {
+    h0: 1L,
+    h1: 0L,
+    h2: 0L,
+    h3: 0L,
+    h4: 0L,
+    h5: 0L,
+    h6: 0L,
+    h7: 0L,
+    h8: 0L,
+    h9: 0L,
+  }
 }
 
 ///|
 fn fe_from_int(v : Int64) -> Fe {
-  { h0: v, h1: 0L, h2: 0L, h3: 0L, h4: 0L, h5: 0L, h6: 0L, h7: 0L, h8: 0L, h9: 0L }
+  {
+    h0: v,
+    h1: 0L,
+    h2: 0L,
+    h3: 0L,
+    h4: 0L,
+    h5: 0L,
+    h6: 0L,
+    h7: 0L,
+    h8: 0L,
+    h9: 0L,
+  }
 }
 
 ///|
@@ -72,7 +105,7 @@ fn fe_carry(f : Fe) -> Fe {
   let c0b = (h0 + (1L << 25)) >> 26
   h1 = h1 + c0b
   h0 = h0 - (c0b << 26)
-  { h0, h1, h2, h3, h4, h5, h6, h7, h8, h9 }
+  { h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, }
 }
 
 ///|
@@ -124,7 +157,7 @@ fn fe_neg(f : Fe) -> Fe {
 }
 
 ///|
-fn fe_cswap(f : Fe, g : Fe, b : Int) -> (Fe, Fe) {
+fn fe_cswap(f : Fe, g : Fe, b : Int32) -> (Fe, Fe) {
   let mask = 0L - b.to_int64()
   let t0 = mask & (f.h0 ^ g.h0)
   let t1 = mask & (f.h1 ^ g.h1)
@@ -300,7 +333,7 @@ fn fe_mul(f : Fe, g : Fe) -> Fe {
     f7 * g2 +
     f8 * g1 +
     f9 * g0
-  fe_carry({ h0, h1, h2, h3, h4, h5, h6, h7, h8, h9 })
+  fe_carry({ h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, })
 }
 
 ///|
@@ -325,7 +358,7 @@ fn fe_mul_121665(f : Fe) -> Fe {
 }
 
 ///|
-fn fe_sq_n(f : Fe, n : Int) -> Fe {
+fn fe_sq_n(f : Fe, n : Int32) -> Fe {
   let mut r = f
   for _i = 0; _i < n; _i = _i + 1 {
     r = fe_sq(r)
@@ -366,14 +399,14 @@ fn fe_pow22523(z : Fe) -> Fe {
 }
 
 ///|
-fn load3_i64(s : Bytes, off : Int) -> Int64 {
+fn load3_i64(s : Bytes, off : Int32) -> Int64 {
   s[off].to_int64() |
   (s[off + 1].to_int64() << 8) |
   (s[off + 2].to_int64() << 16)
 }
 
 ///|
-fn load4_i64(s : Bytes, off : Int) -> Int64 {
+fn load4_i64(s : Bytes, off : Int32) -> Int64 {
   s[off].to_int64() |
   (s[off + 1].to_int64() << 8) |
   (s[off + 2].to_int64() << 16) |
@@ -392,7 +425,7 @@ fn fe_frombytes(s : Bytes) -> Fe {
   let h7 = load3_i64(s, 23) << 5
   let h8 = load3_i64(s, 26) << 4
   let h9 = (load3_i64(s, 29) & 0x7fffffL) << 2
-  fe_carry({ h0, h1, h2, h3, h4, h5, h6, h7, h8, h9 })
+  fe_carry({ h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, })
 }
 
 ///|
@@ -550,7 +583,7 @@ fn fe_tobytes(f : Fe) -> Bytes {
 }
 
 ///|
-fn fe_isnegative(f : Fe) -> Int {
+fn fe_isnegative(f : Fe) -> Int32 {
   let s = fe_tobytes(f)
   s[0].to_int() & 1
 }

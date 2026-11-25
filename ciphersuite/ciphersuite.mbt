@@ -9,11 +9,7 @@ pub fn CipherSuite::hash(self : CipherSuite, data : Bytes) -> Bytes {
 
 ///|
 /// Computes the cipher suite's MAC (`HMAC-SHA256` for CS1 and CS3).
-pub fn CipherSuite::mac(
-  self : CipherSuite,
-  key : Bytes,
-  data : Bytes,
-) -> Bytes {
+pub fn CipherSuite::mac(self : CipherSuite, key : Bytes, data : Bytes) -> Bytes {
   match self {
     X25519Aes128GcmSha256Ed25519 | X25519ChaCha20Poly1305Sha256Ed25519 =>
       @crypto.hmac_sha256(key, data)
@@ -52,7 +48,7 @@ pub fn CipherSuite::expand_with_label(
   secret : Bytes,
   label : String,
   context : Bytes,
-  length : Int,
+  length : Int32,
 ) -> Bytes raise CsError {
   if length < 0 || length > 0xFFFF {
     raise InvalidLength("ExpandWithLabel length out of uint16 range")
@@ -68,7 +64,7 @@ pub fn CipherSuite::expand_with_label(
   let info = w.to_bytes()
   match self {
     X25519Aes128GcmSha256Ed25519 | X25519ChaCha20Poly1305Sha256Ed25519 =>
-      try @crypto.hkdf_expand(secret, info, length) catch {
+      @crypto.hkdf_expand(secret, info, length) catch {
         e => raise CryptoError(e)
       }
   }
@@ -91,8 +87,8 @@ pub fn CipherSuite::derive_tree_secret(
   self : CipherSuite,
   secret : Bytes,
   label : String,
-  generation : UInt,
-  length : Int,
+  generation : UInt32,
+  length : Int32,
 ) -> Bytes raise CsError {
   let w = @tls.Writer::new()
   w.write_u32(generation)
@@ -162,7 +158,7 @@ pub fn CipherSuite::sign_with_label(
   let sign_content = encode_labeled_content(label, content)
   match self {
     X25519Aes128GcmSha256Ed25519 | X25519ChaCha20Poly1305Sha256Ed25519 =>
-      try @crypto.ed25519_sign(sign_priv, sign_content) catch {
+      @crypto.ed25519_sign(sign_priv, sign_content) catch {
         e => raise CryptoError(e)
       }
   }
@@ -177,7 +173,7 @@ pub fn CipherSuite::verify_with_label(
   content : Bytes,
   signature : Bytes,
 ) -> Bool {
-  let sign_content = try encode_labeled_content(label, content) catch {
+  let sign_content = encode_labeled_content(label, content) catch {
     _ => return false
   }
   match self {
@@ -241,11 +237,11 @@ pub fn CipherSuite::aead_seal(
 ) -> Bytes raise CsError {
   match self {
     X25519Aes128GcmSha256Ed25519 =>
-      try @crypto.aes128_gcm_seal(key, nonce, aad, plaintext) catch {
+      @crypto.aes128_gcm_seal(key, nonce, aad, plaintext) catch {
         e => raise CryptoError(e)
       }
     X25519ChaCha20Poly1305Sha256Ed25519 =>
-      try @crypto.chacha20_poly1305_seal(key, nonce, aad, plaintext) catch {
+      @crypto.chacha20_poly1305_seal(key, nonce, aad, plaintext) catch {
         e => raise CryptoError(e)
       }
   }
@@ -263,12 +259,12 @@ pub fn CipherSuite::aead_open(
 ) -> Bytes raise CsError {
   match self {
     X25519Aes128GcmSha256Ed25519 =>
-      try @crypto.aes128_gcm_open(key, nonce, aad, ciphertext) catch {
+      @crypto.aes128_gcm_open(key, nonce, aad, ciphertext) catch {
         @crypto.AuthFailed => raise DecryptionFailed
         e => raise CryptoError(e)
       }
     X25519ChaCha20Poly1305Sha256Ed25519 =>
-      try @crypto.chacha20_poly1305_open(key, nonce, aad, ciphertext) catch {
+      @crypto.chacha20_poly1305_open(key, nonce, aad, ciphertext) catch {
         @crypto.AuthFailed => raise DecryptionFailed
         e => raise CryptoError(e)
       }
@@ -286,7 +282,7 @@ pub fn CipherSuite::signature_keypair_from_seed(
   }
   match self {
     X25519Aes128GcmSha256Ed25519 | X25519ChaCha20Poly1305Sha256Ed25519 => {
-      let pk = try @crypto.ed25519_public_key(seed) catch {
+      let pk = @crypto.ed25519_public_key(seed) catch {
         e => raise CryptoError(e)
       }
       (seed, pk)

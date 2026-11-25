@@ -1,5 +1,5 @@
 ///|
-fn hex_nibble(c : Int) -> Int {
+fn hex_nibble(c : Int32) -> Int32 {
   if c >= '0'.to_int() && c <= '9'.to_int() {
     c - '0'.to_int()
   } else if c >= 'a'.to_int() && c <= 'f'.to_int() {
@@ -24,7 +24,7 @@ fn from_hex(s : String) -> Bytes {
 }
 
 ///|
-fn flip_bit(data : Bytes, byte_idx : Int, bit_mask : Int) -> Bytes {
+fn flip_bit(data : Bytes, byte_idx : Int32, bit_mask : Int32) -> Bytes {
   Bytes::makei(data.length(), fn(i) {
     if i == byte_idx {
       (data[i].to_int() ^ bit_mask).to_byte()
@@ -42,9 +42,9 @@ test "ct_equal and xor_bytes" {
   assert_false(@crypto.ct_equal(b"hello", b"hell"))
   let x = @crypto.xor_bytes(from_hex("0f1e2d3c"), from_hex("f0e1d2c3"))
   assert_eq(x, from_hex("ffffffff"))
-  let err : Result[Bytes, @crypto.CryptoError] = try
-    Ok(@crypto.xor_bytes(b"abc", b"ab"))
-  catch {
+  let err : Result[Bytes, @crypto.CryptoError] = Ok(
+    @crypto.xor_bytes(b"abc", b"ab"),
+  ) catch {
     e => Err(e)
   }
   assert_true(err is Err(@crypto.InvalidInputLength))
@@ -55,23 +55,17 @@ test "sha256 NIST vectors" {
   // Empty string
   assert_eq(
     @crypto.sha256(b""),
-    from_hex(
-      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    ),
+    from_hex("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
   )
   // "abc"
   assert_eq(
     @crypto.sha256(b"abc"),
-    from_hex(
-      "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
-    ),
+    from_hex("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"),
   )
   // Two-block message (56 bytes)
   assert_eq(
     @crypto.sha256(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"),
-    from_hex(
-      "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
-    ),
+    from_hex("248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"),
   )
 }
 
@@ -100,27 +94,21 @@ test "hmac_sha256 RFC 4231 vectors" {
   let data1 = b"Hi There"
   assert_eq(
     @crypto.hmac_sha256(key1, data1),
-    from_hex(
-      "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7",
-    ),
+    from_hex("b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"),
   )
   // Test Case 2
   let key2 = b"Jefe"
   let data2 = b"what do ya want for nothing?"
   assert_eq(
     @crypto.hmac_sha256(key2, data2),
-    from_hex(
-      "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843",
-    ),
+    from_hex("5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"),
   )
   // Test Case 6 (key > 64 bytes)
   let key6 = Bytes::make(131, b'\xaa')
   let data6 = b"Test Using Larger Than Block-Size Key - Hash Key First"
   assert_eq(
     @crypto.hmac_sha256(key6, data6),
-    from_hex(
-      "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54",
-    ),
+    from_hex("60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"),
   )
 }
 
@@ -133,9 +121,7 @@ test "hkdf_sha256 RFC 5869 vectors" {
   let prk1 = @crypto.hkdf_extract(salt1, ikm1)
   assert_eq(
     prk1,
-    from_hex(
-      "077709362c2e32df0ddc3f0dc47bba6390b6c73bb50f9c3122ec844ad7c2b3e5",
-    ),
+    from_hex("077709362c2e32df0ddc3f0dc47bba6390b6c73bb50f9c3122ec844ad7c2b3e5"),
   )
   let okm1 = @crypto.hkdf_expand(prk1, info1, 42)
   assert_eq(
@@ -149,9 +135,7 @@ test "hkdf_sha256 RFC 5869 vectors" {
   let prk3 = @crypto.hkdf_extract(b"", ikm3)
   assert_eq(
     prk3,
-    from_hex(
-      "19ef24a32c717b167f33a91d6f648bdf96596776afdb6377ac434c1c293ccb04",
-    ),
+    from_hex("19ef24a32c717b167f33a91d6f648bdf96596776afdb6377ac434c1c293ccb04"),
   )
   let okm3 = @crypto.hkdf_expand(prk3, b"", 42)
   assert_eq(
@@ -161,9 +145,9 @@ test "hkdf_sha256 RFC 5869 vectors" {
     ),
   )
   // OutputTooLong
-  let too_long : Result[Bytes, @crypto.CryptoError] = try
-    Ok(@crypto.hkdf_expand(prk1, b"", 255 * 32 + 1))
-  catch {
+  let too_long : Result[Bytes, @crypto.CryptoError] = Ok(
+    @crypto.hkdf_expand(prk1, b"", 255 * 32 + 1),
+  ) catch {
     e => Err(e)
   }
   assert_true(too_long is Err(@crypto.OutputTooLong))
@@ -182,9 +166,7 @@ test "aes128_gcm NIST SP 800-38D Test Cases 1-4 and tamper detection" {
   let ct2 = @crypto.aes128_gcm_seal(k0, iv0, b"", pt2)
   assert_eq(
     ct2,
-    from_hex(
-      "0388dace60b6a392f328c2b971b2fe78ab6e47d42cec13bdf53a67b21257bddf",
-    ),
+    from_hex("0388dace60b6a392f328c2b971b2fe78ab6e47d42cec13bdf53a67b21257bddf"),
   )
   assert_eq(@crypto.aes128_gcm_open(k0, iv0, b"", ct2), pt2)
   // Test Case 3: 64B PT, empty AAD
@@ -211,36 +193,36 @@ test "aes128_gcm NIST SP 800-38D Test Cases 1-4 and tamper detection" {
   assert_eq(ct4, expected4)
   assert_eq(@crypto.aes128_gcm_open(k3, iv3, aad4, ct4), pt4)
   // Tamper 1 bit in ciphertext -> AuthFailed
-  let bad_ct : Result[Bytes, @crypto.CryptoError] = try
-    Ok(@crypto.aes128_gcm_open(k3, iv3, aad4, flip_bit(ct4, 0, 1)))
-  catch {
+  let bad_ct : Result[Bytes, @crypto.CryptoError] = Ok(
+    @crypto.aes128_gcm_open(k3, iv3, aad4, flip_bit(ct4, 0, 1)),
+  ) catch {
     e => Err(e)
   }
   assert_true(bad_ct is Err(@crypto.AuthFailed))
   // Tamper 1 bit in AAD -> AuthFailed
-  let bad_aad : Result[Bytes, @crypto.CryptoError] = try
-    Ok(@crypto.aes128_gcm_open(k3, iv3, flip_bit(aad4, 5, 0x80), ct4))
-  catch {
+  let bad_aad : Result[Bytes, @crypto.CryptoError] = Ok(
+    @crypto.aes128_gcm_open(k3, iv3, flip_bit(aad4, 5, 0x80), ct4),
+  ) catch {
     e => Err(e)
   }
   assert_true(bad_aad is Err(@crypto.AuthFailed))
   // Tamper 1 bit in tag -> AuthFailed
-  let bad_tag : Result[Bytes, @crypto.CryptoError] = try
-    Ok(@crypto.aes128_gcm_open(k3, iv3, aad4, flip_bit(ct4, ct4.length() - 1, 1)))
-  catch {
+  let bad_tag : Result[Bytes, @crypto.CryptoError] = Ok(
+    @crypto.aes128_gcm_open(k3, iv3, aad4, flip_bit(ct4, ct4.length() - 1, 1)),
+  ) catch {
     e => Err(e)
   }
   assert_true(bad_tag is Err(@crypto.AuthFailed))
   // Invalid key/nonce lengths
-  let bad_key : Result[Bytes, @crypto.CryptoError] = try
-    Ok(@crypto.aes128_gcm_seal(b"short", iv3, b"", b""))
-  catch {
+  let bad_key : Result[Bytes, @crypto.CryptoError] = Ok(
+    @crypto.aes128_gcm_seal(b"short", iv3, b"", b""),
+  ) catch {
     e => Err(e)
   }
   assert_true(bad_key is Err(@crypto.InvalidKeyLength))
-  let bad_nonce : Result[Bytes, @crypto.CryptoError] = try
-    Ok(@crypto.aes128_gcm_seal(k3, b"short", b"", b""))
-  catch {
+  let bad_nonce : Result[Bytes, @crypto.CryptoError] = Ok(
+    @crypto.aes128_gcm_seal(k3, b"short", b"", b""),
+  ) catch {
     e => Err(e)
   }
   assert_true(bad_nonce is Err(@crypto.InvalidNonceLength))
@@ -262,28 +244,26 @@ test "chacha20_poly1305 RFC 8439 section 2.8.2 and tamper detection" {
   let opened = @crypto.chacha20_poly1305_open(key, nonce, aad, ct_tag)
   assert_eq(opened, pt)
   // Tamper 1 bit in CT, AAD, tag
-  let bad_ct : Result[Bytes, @crypto.CryptoError] = try
-    Ok(@crypto.chacha20_poly1305_open(key, nonce, aad, flip_bit(ct_tag, 10, 0x04)))
-  catch {
+  let bad_ct : Result[Bytes, @crypto.CryptoError] = Ok(
+    @crypto.chacha20_poly1305_open(key, nonce, aad, flip_bit(ct_tag, 10, 0x04)),
+  ) catch {
     e => Err(e)
   }
   assert_true(bad_ct is Err(@crypto.AuthFailed))
-  let bad_aad : Result[Bytes, @crypto.CryptoError] = try
-    Ok(@crypto.chacha20_poly1305_open(key, nonce, flip_bit(aad, 0, 0x01), ct_tag))
-  catch {
+  let bad_aad : Result[Bytes, @crypto.CryptoError] = Ok(
+    @crypto.chacha20_poly1305_open(key, nonce, flip_bit(aad, 0, 0x01), ct_tag),
+  ) catch {
     e => Err(e)
   }
   assert_true(bad_aad is Err(@crypto.AuthFailed))
-  let bad_tag : Result[Bytes, @crypto.CryptoError] = try
-    Ok(
-      @crypto.chacha20_poly1305_open(
-        key,
-        nonce,
-        aad,
-        flip_bit(ct_tag, ct_tag.length() - 1, 0x01),
-      ),
-    )
-  catch {
+  let bad_tag : Result[Bytes, @crypto.CryptoError] = Ok(
+    @crypto.chacha20_poly1305_open(
+      key,
+      nonce,
+      aad,
+      flip_bit(ct_tag, ct_tag.length() - 1, 0x01),
+    ),
+  ) catch {
     e => Err(e)
   }
   assert_true(bad_tag is Err(@crypto.AuthFailed))
@@ -300,9 +280,7 @@ test "x25519 RFC 7748 section 5.2 and 6.1 vectors" {
   )
   assert_eq(
     @crypto.x25519(s1, u1),
-    from_hex(
-      "c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552",
-    ),
+    from_hex("c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552"),
   )
   // Section 5.2 Test Vector 2 (bit 255 set in u_coord)
   let s2 = from_hex(
@@ -313,9 +291,7 @@ test "x25519 RFC 7748 section 5.2 and 6.1 vectors" {
   )
   assert_eq(
     @crypto.x25519(s2, u2),
-    from_hex(
-      "95cbde9476e8907d7aade45cb4b873f88b595a68799fa152e6f8f7647aac7957",
-    ),
+    from_hex("95cbde9476e8907d7aade45cb4b873f88b595a68799fa152e6f8f7647aac7957"),
   )
   // Section 5.2 Iterated test (1 and 1,000 iterations)
   let mut k = from_hex(
@@ -337,9 +313,7 @@ test "x25519 RFC 7748 section 5.2 and 6.1 vectors" {
   }
   assert_eq(
     k,
-    from_hex(
-      "684cf59ba83309552800ef566f2f4d3c1c3887c49360e3875f2eb94d99532c51",
-    ),
+    from_hex("684cf59ba83309552800ef566f2f4d3c1c3887c49360e3875f2eb94d99532c51"),
   )
   // Section 6.1 Alice / Bob DH exchange
   let alice_priv = from_hex(
@@ -348,9 +322,7 @@ test "x25519 RFC 7748 section 5.2 and 6.1 vectors" {
   let alice_pub = @crypto.x25519_public_key(alice_priv)
   assert_eq(
     alice_pub,
-    from_hex(
-      "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a",
-    ),
+    from_hex("8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a"),
   )
   let bob_priv = from_hex(
     "5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb",
@@ -358,9 +330,7 @@ test "x25519 RFC 7748 section 5.2 and 6.1 vectors" {
   let bob_pub = @crypto.x25519_public_key(bob_priv)
   assert_eq(
     bob_pub,
-    from_hex(
-      "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f",
-    ),
+    from_hex("de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f"),
   )
   let expected_shared = from_hex(
     "4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742",
@@ -369,9 +339,9 @@ test "x25519 RFC 7748 section 5.2 and 6.1 vectors" {
   assert_eq(@crypto.x25519_dh(bob_priv, alice_pub), expected_shared)
   // Low-order all-zero point must be rejected by x25519_dh
   let zero_pt = Bytes::make(32, b'\x00')
-  let low_order : Result[Bytes, @crypto.CryptoError] = try
-    Ok(@crypto.x25519_dh(alice_priv, zero_pt))
-  catch {
+  let low_order : Result[Bytes, @crypto.CryptoError] = Ok(
+    @crypto.x25519_dh(alice_priv, zero_pt),
+  ) catch {
     e => Err(e)
   }
   assert_true(low_order is Err(@crypto.LowOrderPoint))
@@ -462,9 +432,9 @@ test "ed25519 RFC 8032 section 7.1 vectors and malleability rejection" {
   // Wrong lengths
   assert_false(@crypto.ed25519_verify(b"short", b"", sig1))
   assert_false(@crypto.ed25519_verify(pk1, b"", b"short"))
-  let sig_err : Result[Unit, @crypto.CryptoError] = try
-    Ok(@crypto.ed25519_verify_or_raise(pk1, b"tampered", sig1))
-  catch {
+  let sig_err : Result[Unit, @crypto.CryptoError] = Ok(
+    @crypto.ed25519_verify_or_raise(pk1, b"tampered", sig1),
+  ) catch {
     e => Err(e)
   }
   assert_true(sig_err is Err(@crypto.InvalidSignature))

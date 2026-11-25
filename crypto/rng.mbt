@@ -11,11 +11,14 @@ pub fn DeterministicRng::from_seed(seed : Bytes) -> DeterministicRng {
   } else {
     sha256(seed)
   }
-  { key: init_key, counter: 0UL }
+  { key: init_key, counter: 0UL, }
 }
 
 ///|
-pub fn DeterministicRng::next_bytes(self : DeterministicRng, n : Int) -> Bytes {
+pub fn DeterministicRng::next_bytes(
+  self : DeterministicRng,
+  n : Int32,
+) -> Bytes {
   if n <= 0 {
     return b""
   }

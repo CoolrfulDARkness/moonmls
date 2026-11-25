@@ -172,16 +172,18 @@ MoonMLS 针对 RFC 9420 真实威胁模型构造了 26 项对抗攻击测试（`
 
 在 `moon.pkg` 中引入顶层包 `CoolrfulDARkness/moonmls`：
 
-```moonbit
+```moonbit nocheck
+///|
 import {
   "CoolrfulDARkness/moonmls" @mls,
-  "CoolrfulDARkness/moonmls/types" @types,
+  "CoolrfulDARkness/moonmls/types",
 }
 ```
 
 创建群组、拉入成员、端到端加密通信与导出会话密钥：
 
-```moonbit
+```moonbit nocheck
+///|
 fn example() -> Unit raise {
   // 选择密码套件：CS1 (AES-128-GCM) 或 CS3 (ChaCha20-Poly1305)
   let cs = @mls.cs_x25519_aes128gcm()
@@ -193,7 +195,10 @@ fn example() -> Unit raise {
   @mls.verify_key_package(cs, bob_bundle.key_package)
 
   // 2. Alice 提交 Add(Bob) Commit -> Epoch 1，签发 Welcome
-  let commit_out = alice.commit([@types.Proposal::Add(bob_bundle.key_package)], rng)
+  let commit_out = alice.commit(
+    [@types.Proposal::Add(bob_bundle.key_package)],
+    rng,
+  )
   let welcome = commit_out.welcome.unwrap()
 
   // 3. Bob 通过 Welcome 同步入群，双方状态逐字节一致
@@ -205,12 +210,13 @@ fn example() -> Unit raise {
   )
 
   // 4. 端到端加密群聊（PrivateMessage）
-  let cipher = alice.protect_application(b"Hello MoonMLS!", b"room:general", rng)
+  let cipher = alice.protect_application(
+    b"Hello MoonMLS!", b"room:general", rng,
+  )
   match bob.process_message(cipher) {
-    Application(sender_leaf, plaintext, aad) => {
+    Application(sender_leaf, plaintext, aad) =>
       // sender_leaf == 0U, plaintext == b"Hello MoonMLS!", aad == b"room:general"
       ignore((sender_leaf, plaintext, aad))
-    }
     _ => ()
   }
 }

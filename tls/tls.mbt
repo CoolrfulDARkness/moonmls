@@ -14,7 +14,7 @@ pub(all) suberror TlsError {
 }
 
 ///|
-pub impl Show for TlsError with output(self, logger) {
+pub impl Show for TlsError with fn output(self, logger) {
   match self {
     UnexpectedEof => logger.write_string("UnexpectedEof")
     InvalidVarint => logger.write_string("InvalidVarint")
@@ -40,12 +40,12 @@ pub struct Writer {
 ///|
 /// Creates an empty `Writer`.
 pub fn Writer::new() -> Writer {
-  { buf: [] }
+  { buf: [], }
 }
 
 ///|
 /// Returns the number of bytes written so far.
-pub fn Writer::len(self : Writer) -> Int {
+pub fn Writer::len(self : Writer) -> Int32 {
   self.buf.length()
 }
 
@@ -63,14 +63,14 @@ pub fn Writer::write_u8(self : Writer, value : Byte) -> Unit {
 
 ///|
 /// Writes an unsigned 16-bit integer (`uint16`) in big-endian byte order.
-pub fn Writer::write_u16(self : Writer, value : UInt) -> Unit {
+pub fn Writer::write_u16(self : Writer, value : UInt32) -> Unit {
   self.buf.push(((value >> 8) & 0xFFU).to_byte())
   self.buf.push((value & 0xFFU).to_byte())
 }
 
 ///|
 /// Writes an unsigned 32-bit integer (`uint32`) in big-endian byte order.
-pub fn Writer::write_u32(self : Writer, value : UInt) -> Unit {
+pub fn Writer::write_u32(self : Writer, value : UInt32) -> Unit {
   self.buf.push(((value >> 24) & 0xFFU).to_byte())
   self.buf.push(((value >> 16) & 0xFFU).to_byte())
   self.buf.push(((value >> 8) & 0xFFU).to_byte())
@@ -101,7 +101,10 @@ pub fn Writer::write_raw(self : Writer, data : Bytes) -> Unit {
 ///|
 /// Writes an MLS variable-length integer (RFC 9420 §2.1.2).
 /// Valid range is `0 <= value <= 0x3FFFFFFF` (1073741823).
-pub fn Writer::write_varint(self : Writer, value : Int) -> Unit raise TlsError {
+pub fn Writer::write_varint(
+  self : Writer,
+  value : Int32,
+) -> Unit raise TlsError {
   if value < 0 || value > 0x3FFFFFFF {
     raise VarintOverflow
   }
@@ -158,18 +161,18 @@ pub fn[T] Writer::write_optional(
 /// Strict cursor-based TLS presentation language reader.
 pub struct Reader {
   data : Bytes
-  mut pos : Int
+  mut pos : Int32
 }
 
 ///|
 /// Creates a `Reader` positioned at offset 0 of `data`.
 pub fn Reader::new(data : Bytes) -> Reader {
-  { data, pos: 0 }
+  { data, pos: 0, }
 }
 
 ///|
 /// Returns the number of unread bytes remaining.
-pub fn Reader::remaining(self : Reader) -> Int {
+pub fn Reader::remaining(self : Reader) -> Int32 {
   self.data.length() - self.pos
 }
 
@@ -181,7 +184,7 @@ pub fn Reader::is_empty(self : Reader) -> Bool {
 
 ///|
 /// Returns the current byte offset in the underlying buffer.
-pub fn Reader::offset(self : Reader) -> Int {
+pub fn Reader::offset(self : Reader) -> Int32 {
   self.pos
 }
 
@@ -206,7 +209,7 @@ pub fn Reader::read_u8(self : Reader) -> Byte raise TlsError {
 
 ///|
 /// Reads an unsigned 16-bit integer (`uint16`) in big-endian byte order.
-pub fn Reader::read_u16(self : Reader) -> UInt raise TlsError {
+pub fn Reader::read_u16(self : Reader) -> UInt32 raise TlsError {
   if self.remaining() < 2 {
     raise UnexpectedEof
   }
@@ -218,7 +221,7 @@ pub fn Reader::read_u16(self : Reader) -> UInt raise TlsError {
 
 ///|
 /// Reads an unsigned 32-bit integer (`uint32`) in big-endian byte order.
-pub fn Reader::read_u32(self : Reader) -> UInt raise TlsError {
+pub fn Reader::read_u32(self : Reader) -> UInt32 raise TlsError {
   if self.remaining() < 4 {
     raise UnexpectedEof
   }
@@ -257,7 +260,7 @@ pub fn Reader::read_u64(self : Reader) -> UInt64 raise TlsError {
 
 ///|
 /// Reads exactly `len` bytes.
-pub fn Reader::read_fixed(self : Reader, len : Int) -> Bytes raise TlsError {
+pub fn Reader::read_fixed(self : Reader, len : Int32) -> Bytes raise TlsError {
   if len < 0 {
     raise LengthMismatch
   }
@@ -276,7 +279,7 @@ pub fn Reader::read_fixed(self : Reader, len : Int) -> Bytes raise TlsError {
 /// Reads an MLS variable-length integer (RFC 9420 §2.1.2).
 /// Rejects `11` prefix (`InvalidVarint`), non-minimal encodings
 /// (`NonMinimalVarint`), and truncated inputs (`UnexpectedEof`).
-pub fn Reader::read_varint(self : Reader) -> Int raise TlsError {
+pub fn Reader::read_varint(self : Reader) -> Int32 raise TlsError {
   if self.remaining() < 1 {
     raise UnexpectedEof
   }
@@ -360,7 +363,7 @@ pub fn[T] Reader::read_optional(
 }
 
 ///|
-fn hex_nibble(code : UInt16) -> Int raise TlsError {
+fn hex_nibble(code : UInt16) -> Int32 raise TlsError {
   let c = code.to_int()
   if c >= 0x30 && c <= 0x39 {
     c - 0x30
@@ -391,7 +394,7 @@ pub fn bytes_from_hex(hex : String) -> Bytes raise TlsError {
 }
 
 ///|
-fn nibble_to_hex_char(n : Int) -> Char {
+fn nibble_to_hex_char(n : Int32) -> Char {
   if n < 10 {
     (0x30 + n).unsafe_to_char()
   } else {
@@ -432,8 +435,8 @@ pub fn bytes_concat(parts : Array[Bytes]) -> Bytes {
 /// Returns a copy of the half-open slice `data[start..end)`.
 pub fn bytes_slice(
   data : Bytes,
-  start : Int,
-  end : Int,
+  start : Int32,
+  end : Int32,
 ) -> Bytes raise TlsError {
   if start < 0 || end < start {
     raise LengthMismatch
@@ -446,7 +449,7 @@ pub fn bytes_slice(
 
 ///|
 /// Encodes an integer as an MLS varint byte sequence.
-pub fn encode_varint_bytes(value : Int) -> Bytes raise TlsError {
+pub fn encode_varint_bytes(value : Int32) -> Bytes raise TlsError {
   let w = Writer::new()
   w.write_varint(value)
   w.to_bytes()

@@ -8,7 +8,16 @@ repository = "https://github.com/CoolrfulDARkness/moonmls"
 
 license = "Apache-2.0"
 
-keywords = ["mls", "rfc9420", "hpke", "rfc9180", "e2ee", "cryptography", "sans-io", "security"]
+keywords = [
+  "mls",
+  "rfc9420",
+  "hpke",
+  "rfc9180",
+  "e2ee",
+  "cryptography",
+  "sans-io",
+  "security",
+]
 
 preferred_target = "wasm-gc"
 

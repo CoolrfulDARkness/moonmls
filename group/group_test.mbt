@@ -1,5 +1,5 @@
 ///|
-fn flip_byte_at(data : Bytes, idx : Int) -> Bytes {
+fn flip_byte_at(data : Bytes, idx : Int32) -> Bytes {
   Bytes::makei(data.length(), fn(i) {
     if i == idx {
       (data[i].to_int() ^ 0xFF).to_byte()
@@ -10,7 +10,10 @@ fn flip_byte_at(data : Bytes, idx : Int) -> Bytes {
 }
 
 ///|
-fn assert_group_sync(groups : Array[@group.MlsGroup], expected_epoch : UInt64) -> Unit raise {
+fn assert_group_sync(
+  groups : Array[@group.MlsGroup],
+  expected_epoch : UInt64,
+) -> Unit raise {
   let n = groups.length()
   assert_true(n > 0)
   let ref_auth = groups[0].epoch_authenticator()
@@ -64,7 +67,9 @@ fn run_full_lifecycle_for_cs(
   // 4. Bob proposes adding Charlie, Alice commits pending -> epoch 2
   let prop_add_charlie = bob.propose_add(charlie_kp.key_package, rng)
   let p_res = alice.process_message(prop_add_charlie)
-  assert_true(p_res is @group.ProcessedMessage::Proposal(1U, @types.Proposal::Add(_)))
+  assert_true(
+    p_res is @group.ProcessedMessage::Proposal(1U, @types.Proposal::Add(_)),
+  )
   let c2 = alice.commit_pending(rng)
   assert_eq(c2.new_epoch, 2UL)
   let bob_c2 = bob.process_message(c2.commit_msg)
@@ -161,7 +166,9 @@ fn run_full_lifecycle_for_cs(
   for i = 0; i < 5; i = i + 1 {
     if i != 3 {
       let r = all5[i].process_message(dave_upd_msg)
-      assert_true(r is @group.ProcessedMessage::Proposal(3U, @types.Proposal::Update(_)))
+      assert_true(
+        r is @group.ProcessedMessage::Proposal(3U, @types.Proposal::Update(_)),
+      )
     }
   }
   let c4 = bob.commit_pending(rng)
@@ -324,7 +331,10 @@ fn run_full_lifecycle_for_cs(
     content_type: legit_msg.content_type,
     authenticated_data: legit_msg.authenticated_data,
     encrypted_sender_data: legit_msg.encrypted_sender_data,
-    ciphertext: flip_byte_at(legit_msg.ciphertext, legit_msg.ciphertext.length() - 1),
+    ciphertext: flip_byte_at(
+      legit_msg.ciphertext,
+      legit_msg.ciphertext.length() - 1,
+    ),
   }
   let mut got_ct_tail_err = false
   try {
@@ -392,7 +402,7 @@ test "KeyPackage validation & error handling" {
   @group.verify_key_package(cs1, kp)
   // Wrong cipher suite
   let mut err_cs = false
-  try @group.verify_key_package(cs3, kp) catch {
+  @group.verify_key_package(cs3, kp) catch {
     @group.GroupError::CipherSuiteMismatch => err_cs = true
     _ => fail("expected CipherSuiteMismatch")
   }
@@ -407,7 +417,7 @@ test "KeyPackage validation & error handling" {
     signature: kp.signature,
   }
   let mut err_ver = false
-  try @group.verify_key_package(cs1, bad_ver) catch {
+  @group.verify_key_package(cs1, bad_ver) catch {
     @group.GroupError::UnsupportedProtocolVersion(2U) => err_ver = true
     _ => fail("expected UnsupportedProtocolVersion")
   }
@@ -422,7 +432,7 @@ test "KeyPackage validation & error handling" {
     signature: kp.signature,
   }
   let mut err_same = false
-  try @group.verify_key_package(cs1, same_key) catch {
+  @group.verify_key_package(cs1, same_key) catch {
     @group.GroupError::InvalidKeyPackage(_) => err_same = true
     _ => fail("expected InvalidKeyPackage for init_key == encryption_key")
   }
@@ -437,7 +447,7 @@ test "KeyPackage validation & error handling" {
     signature: flip_byte_at(kp.signature, 0),
   }
   let mut err_sig = false
-  try @group.verify_key_package(cs1, bad_sig) catch {
+  @group.verify_key_package(cs1, bad_sig) catch {
     @group.GroupError::InvalidKeyPackage(_) => err_sig = true
     _ => fail("expected InvalidKeyPackage for bad signature")
   }

@@ -1,15 +1,15 @@
 ///|
-fn rotl32(x : UInt, n : Int) -> UInt {
+fn rotl32(x : UInt32, n : Int32) -> UInt32 {
   (x << n) | (x >> (32 - n))
 }
 
 ///|
 fn chacha20_quarter_round(
-  s : FixedArray[UInt],
-  a : Int,
-  b : Int,
-  c : Int,
-  d : Int,
+  s : FixedArray[UInt32],
+  a : Int32,
+  b : Int32,
+  c : Int32,
+  d : Int32,
 ) -> Unit {
   s[a] = s[a] + s[b]
   s[d] = rotl32(s[d] ^ s[a], 16)
@@ -24,7 +24,7 @@ fn chacha20_quarter_round(
 ///|
 fn chacha20_block(
   key : Bytes,
-  counter : UInt,
+  counter : UInt32,
   nonce : Bytes,
 ) -> FixedArray[Byte] {
   let init = FixedArray::make(16, 0U)
@@ -63,10 +63,10 @@ fn chacha20_block(
 ///|
 fn chacha20_xor_slice(
   key : Bytes,
-  initial_counter : UInt,
+  initial_counter : UInt32,
   nonce : Bytes,
   input : Bytes,
-  len : Int,
+  len : Int32,
 ) -> FixedArray[Byte] {
   let out = FixedArray::make(len, b'\x00')
   let mut ctr = initial_counter
@@ -104,11 +104,11 @@ priv struct Poly1305State {
   mut h3 : UInt64
   mut h4 : UInt64
   buf : FixedArray[Byte]
-  mut buf_len : Int
+  mut buf_len : Int32
 }
 
 ///|
-fn load_le32_arr(data : FixedArray[Byte], offset : Int) -> UInt {
+fn load_le32_arr(data : FixedArray[Byte], offset : Int32) -> UInt32 {
   data[offset].to_uint() |
   (data[offset + 1].to_uint() << 8) |
   (data[offset + 2].to_uint() << 16) |
@@ -230,8 +230,8 @@ fn Poly1305State::process_block(
 fn Poly1305State::update_slice(
   self : Poly1305State,
   data : Bytes,
-  start : Int,
-  len : Int,
+  start : Int32,
+  len : Int32,
 ) -> Unit {
   let mut i = 0
   while i < len {
@@ -264,7 +264,7 @@ fn Poly1305State::update_fixed(
 }
 
 ///|
-fn Poly1305State::pad16(self : Poly1305State, data_len : Int) -> Unit {
+fn Poly1305State::pad16(self : Poly1305State, data_len : Int32) -> Unit {
   let rem = data_len % 16
   if rem != 0 {
     let pad_len = 16 - rem
@@ -355,7 +355,7 @@ fn chacha20_poly1305_tag(
   otk : FixedArray[Byte],
   aad : Bytes,
   ct : Bytes,
-  ct_len : Int,
+  ct_len : Int32,
 ) -> Bytes {
   let poly = Poly1305State::new(otk)
   poly.update_slice(aad, 0, aad.length())

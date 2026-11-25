@@ -54,7 +54,7 @@ pub fn KeyPackageBundle::generate(
     credential: @types.Credential::Basic(identity),
     capabilities: default_capabilities(),
     leaf_node_source: @types.LeafNodeSource::KeyPackage,
-    lifetime: Some({ not_before: 0UL, not_after: 0xFFFFFFFFFFFFFFFFUL }),
+    lifetime: Some({ not_before: 0UL, not_after: 0xFFFFFFFFFFFFFFFFUL, }),
     parent_hash: None,
     extensions: [],
     signature: b"",
@@ -96,7 +96,7 @@ pub fn KeyPackageBundle::generate(
     extensions: unsigned_kp.extensions,
     signature: kp_sig,
   }
-  { key_package, init_priv, encryption_priv, signature_priv }
+  { key_package, init_priv, encryption_priv, signature_priv, }
 }
 
 ///|

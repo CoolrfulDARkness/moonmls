@@ -2,8 +2,8 @@
 /// Sender of an MLS framed message (`Sender`, RFC 9420 §6).
 #derive(Eq, Debug)
 pub(all) enum Sender {
-  Member(UInt)
-  External(UInt)
+  Member(UInt32)
+  External(UInt32)
   NewMemberProposal
   NewMemberCommit
 }
@@ -174,7 +174,7 @@ pub fn FramedContent::decode(
   let sender = Sender::decode(r)
   let authenticated_data = r.read_opaque()
   let content = FramedContentBody::decode(r)
-  { group_id, epoch, sender, authenticated_data, content }
+  { group_id, epoch, sender, authenticated_data, content, }
 }
 
 ///|
@@ -241,7 +241,7 @@ pub fn FramedContentAuthData::decode(
     Commit => Some(r.read_opaque())
     Application | Proposal => None
   }
-  { signature, confirmation_tag }
+  { signature, confirmation_tag, }
 }
 
 ///|
@@ -260,7 +260,7 @@ pub fn FramedContentAuthData::from_bytes(
 /// `context` is encoded if and only if `content.sender` is `Member` or `NewMemberCommit`.
 #derive(Eq, Debug)
 pub(all) struct FramedContentTbs {
-  version : UInt
+  version : UInt32
   wire_format : WireFormat
   content : FramedContent
   context : GroupContext?
@@ -312,7 +312,7 @@ pub fn FramedContentTbs::decode(
     Member(_) | NewMemberCommit => Some(GroupContext::decode(r))
     External(_) | NewMemberProposal => None
   }
-  { version, wire_format, content, context }
+  { version, wire_format, content, context, }
 }
 
 ///|
@@ -360,7 +360,7 @@ pub fn AuthenticatedContent::decode(
   let wire_format = WireFormat::decode(r)
   let content = FramedContent::decode(r)
   let auth = FramedContentAuthData::decode(r, content.content.content_type())
-  { wire_format, content, auth }
+  { wire_format, content, auth, }
 }
 
 ///|
@@ -408,7 +408,7 @@ pub fn AuthenticatedContentTbm::decode(
     r,
     content_tbs.content.content.content_type(),
   )
-  { content_tbs, auth }
+  { content_tbs, auth, }
 }
 
 ///|
@@ -456,7 +456,7 @@ pub fn ConfirmedTranscriptHashInput::decode(
   let wire_format = WireFormat::decode(r)
   let content = FramedContent::decode(r)
   let signature = r.read_opaque()
-  { wire_format, content, signature }
+  { wire_format, content, signature, }
 }
 
 ///|
@@ -565,7 +565,7 @@ pub fn PublicMessage::decode(
     Member(_) => Some(r.read_opaque())
     External(_) | NewMemberProposal | NewMemberCommit => None
   }
-  { content, auth, membership_tag }
+  { content, auth, membership_tag, }
 }
 
 ///|
@@ -649,7 +649,7 @@ pub fn PrivateMessage::from_bytes(
 pub(all) struct PrivateMessageContent {
   content : FramedContentBody
   auth : FramedContentAuthData
-  padding_len : Int
+  padding_len : Int32
 }
 
 ///|
@@ -693,7 +693,7 @@ pub fn PrivateMessageContent::decode(
     }
     padding_len += 1
   }
-  { content, auth, padding_len }
+  { content, auth, padding_len, }
 }
 
 ///|
@@ -745,7 +745,7 @@ pub fn PrivateContentAad::decode(
   let epoch = r.read_u64()
   let content_type = ContentType::decode(r)
   let authenticated_data = r.read_opaque()
-  { group_id, epoch, content_type, authenticated_data }
+  { group_id, epoch, content_type, authenticated_data, }
 }
 
 ///|
@@ -763,8 +763,8 @@ pub fn PrivateContentAad::from_bytes(
 /// `reuse_guard` is fixed at 4 bytes.
 #derive(Eq, Debug)
 pub(all) struct MlsSenderData {
-  leaf_index : UInt
-  generation : UInt
+  leaf_index : UInt32
+  generation : UInt32
   reuse_guard : Bytes
 }
 
@@ -797,7 +797,7 @@ pub fn MlsSenderData::decode(
   let leaf_index = r.read_u32()
   let generation = r.read_u32()
   let reuse_guard = r.read_fixed(4)
-  { leaf_index, generation, reuse_guard }
+  { leaf_index, generation, reuse_guard, }
 }
 
 ///|
@@ -845,7 +845,7 @@ pub fn MlsSenderDataAad::decode(
   let group_id = r.read_opaque()
   let epoch = r.read_u64()
   let content_type = ContentType::decode(r)
-  { group_id, epoch, content_type }
+  { group_id, epoch, content_type, }
 }
 
 ///|
@@ -884,33 +884,33 @@ pub fn MlsMessageBody::wire_format(self : MlsMessageBody) -> WireFormat {
 /// Top-level MLS wire message envelope (`MLSMessage`, RFC 9420 §6).
 #derive(Eq, Debug)
 pub(all) struct MlsMessage {
-  version : UInt
+  version : UInt32
   body : MlsMessageBody
 }
 
 ///|
 pub fn MlsMessage::public_message(msg : PublicMessage) -> MlsMessage {
-  { version: PROTOCOL_VERSION_MLS10, body: PublicMessage(msg) }
+  { version: PROTOCOL_VERSION_MLS10, body: PublicMessage(msg), }
 }
 
 ///|
 pub fn MlsMessage::private_message(msg : PrivateMessage) -> MlsMessage {
-  { version: PROTOCOL_VERSION_MLS10, body: PrivateMessage(msg) }
+  { version: PROTOCOL_VERSION_MLS10, body: PrivateMessage(msg), }
 }
 
 ///|
 pub fn MlsMessage::welcome(w : Welcome) -> MlsMessage {
-  { version: PROTOCOL_VERSION_MLS10, body: Welcome(w) }
+  { version: PROTOCOL_VERSION_MLS10, body: Welcome(w), }
 }
 
 ///|
 pub fn MlsMessage::group_info(gi : GroupInfo) -> MlsMessage {
-  { version: PROTOCOL_VERSION_MLS10, body: GroupInfo(gi) }
+  { version: PROTOCOL_VERSION_MLS10, body: GroupInfo(gi), }
 }
 
 ///|
 pub fn MlsMessage::key_package(kp : KeyPackage) -> MlsMessage {
-  { version: PROTOCOL_VERSION_MLS10, body: KeyPackage(kp) }
+  { version: PROTOCOL_VERSION_MLS10, body: KeyPackage(kp), }
 }
 
 ///|
@@ -945,7 +945,9 @@ pub fn MlsMessage::to_bytes(self : MlsMessage) -> Bytes raise @tls.TlsError {
 pub fn MlsMessage::decode(r : @tls.Reader) -> MlsMessage raise @tls.TlsError {
   let version = r.read_u16()
   if version != PROTOCOL_VERSION_MLS10 {
-    raise @tls.TlsError::InvalidEnum("unsupported MlsMessage version: \{version}")
+    raise @tls.TlsError::InvalidEnum(
+      "unsupported MlsMessage version: \{version}",
+    )
   }
   let wf = WireFormat::decode(r)
   let body : MlsMessageBody = match wf {
@@ -955,7 +957,7 @@ pub fn MlsMessage::decode(r : @tls.Reader) -> MlsMessage raise @tls.TlsError {
     MlsGroupInfo => GroupInfo(GroupInfo::decode(r))
     MlsKeyPackage => KeyPackage(KeyPackage::decode(r))
   }
-  { version, body }
+  { version, body, }
 }
 
 ///|

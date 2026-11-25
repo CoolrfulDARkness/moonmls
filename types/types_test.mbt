@@ -51,10 +51,10 @@ fn sample_leaf_key_package() -> @types.LeafNode {
     credential: @types.Credential::Basic(b"alice"),
     capabilities: sample_capabilities(),
     leaf_node_source: @types.LeafNodeSource::KeyPackage,
-    lifetime: Some({ not_before: 1000UL, not_after: 999999UL }),
+    lifetime: Some({ not_before: 1000UL, not_after: 999999UL, }),
     parent_hash: None,
     extensions: [
-      { extension_type: @types.EXT_APPLICATION_ID, extension_data: b"app-1" },
+      { extension_type: @types.EXT_APPLICATION_ID, extension_data: b"app-1", },
     ],
     signature: b"\xAA\xBB\xCC\xDD",
   }
@@ -82,7 +82,7 @@ fn sample_group_context() -> @types.GroupContext {
     tree_hash: b"\x21\x22\x23\x24",
     confirmed_transcript_hash: b"\x31\x32\x33\x34",
     extensions: [
-      { extension_type: @types.EXT_EXTERNAL_PUB, extension_data: b"\x99\x88" },
+      { extension_type: @types.EXT_EXTERNAL_PUB, extension_data: b"\x99\x88", },
     ],
   }
 }
@@ -223,7 +223,9 @@ test "official messages.json all 17 wire types 100% byte-for-byte roundtrip" {
     let dec_pub_app = @types.MlsMessage::from_bytes(raw_pub_app)
     match dec_pub_app.body {
       @types.MlsMessageBody::PublicMessage(pm) => {
-        assert_true(pm.content.content is @types.FramedContentBody::Application(_))
+        assert_true(
+          pm.content.content is @types.FramedContentBody::Application(_),
+        )
         assert_eq(pm.auth.confirmation_tag, None)
       }
       _ => fail("expected PublicMessage(Application)")
@@ -308,8 +310,7 @@ test "primitive enums, Credential Basic/X509, Capabilities, Lifetime, Extension 
   assert_eq(@tls.bytes_to_hex(c_x509_empty.to_bytes()), "000200")
 
   let c_x509 = @types.Credential::X509([
-    b"\x30\x82\x01\x0A",
-    b"\x30\x82\x02\x0B\x0C",
+    b"\x30\x82\x01\x0A", b"\x30\x82\x02\x0B\x0C",
   ])
   assert_eq(@types.Credential::from_bytes(c_x509.to_bytes()), c_x509)
 
@@ -317,7 +318,10 @@ test "primitive enums, Credential Basic/X509, Capabilities, Lifetime, Extension 
   let caps = sample_capabilities()
   assert_eq(@types.Capabilities::from_bytes(caps.to_bytes()), caps)
 
-  let lt : @types.Lifetime = { not_before: 1700000000UL, not_after: 1800000000UL }
+  let lt : @types.Lifetime = {
+    not_before: 1700000000UL,
+    not_after: 1800000000UL,
+  }
   assert_eq(@types.Lifetime::from_bytes(lt.to_bytes()), lt)
 
   let ext : @types.Extension = {
@@ -413,7 +417,7 @@ test "PSK types (External + all Resumption usages) and all 7 tagged Proposals" {
   )
   assert_eq(@types.PreSharedKeyId::from_bytes(psk_ext.to_bytes()), psk_ext)
 
-  let usages : Array[UInt] = [1U, 2U, 3U]
+  let usages : Array[UInt32] = [1U, 2U, 3U]
   for i = 0; i < usages.length(); i = i + 1 {
     let psk_res = @types.PreSharedKeyId::Resumption(
       usage=usages[i],
@@ -431,7 +435,11 @@ test "PSK types (External + all Resumption usages) and all 7 tagged Proposals" {
     psk_nonce=b"",
   )
   assert_invalid_enum(() => bad_res.to_bytes())
-  assert_invalid_enum(() => @types.PreSharedKeyId::from_bytes(b"\x02\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"))
+  assert_invalid_enum(() => {
+    @types.PreSharedKeyId::from_bytes(
+      b"\x02\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00",
+    )
+  })
 
   // All 7 full tagged Proposal variants
   let proposals : Array[@types.Proposal] = [
@@ -448,12 +456,15 @@ test "PSK types (External + all Resumption usages) and all 7 tagged Proposals" {
       version=@types.PROTOCOL_VERSION_MLS10,
       cipher_suite=@types.CIPHER_SUITE_MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_ED25519,
       extensions=[
-        { extension_type: @types.EXT_REQUIRED_CAPABILITIES, extension_data: b"\x00\x00\x00" },
+        {
+          extension_type: @types.EXT_REQUIRED_CAPABILITIES,
+          extension_data: b"\x00\x00\x00",
+        },
       ],
     ),
     ExternalInit(b"\xCA\xFE\xBA\xBE"),
     GroupContextExtensions([
-      { extension_type: @types.EXT_APPLICATION_ID, extension_data: b"ctx-ext" },
+      { extension_type: @types.EXT_APPLICATION_ID, extension_data: b"ctx-ext", },
     ]),
   ]
   for i = 0; i < proposals.length(); i = i + 1 {
@@ -471,7 +482,10 @@ test "PSK types (External + all Resumption usages) and all 7 tagged Proposals" {
     proposals: [ref_por, @types.ProposalOrRef::Proposal(Remove(1U))],
     path: None,
   }
-  assert_eq(@types.Commit::from_bytes(commit_no_path.to_bytes()), commit_no_path)
+  assert_eq(
+    @types.Commit::from_bytes(commit_no_path.to_bytes()),
+    commit_no_path,
+  )
 }
 
 ///|
@@ -531,7 +545,7 @@ test "framing structs: Sender, FramedContentTbs, AuthContent, Transcript, Public
     }
     assert_eq(@types.AuthenticatedContent::from_bytes(ac.to_bytes()), ac)
 
-    let tbm : @types.AuthenticatedContentTbm = { content_tbs: tbs, auth }
+    let tbm : @types.AuthenticatedContentTbm = { content_tbs: tbs, auth, }
     assert_eq(@types.AuthenticatedContentTbm::from_bytes(tbm.to_bytes()), tbm)
 
     let is_member = sender is @types.Sender::Member(_)
@@ -563,7 +577,7 @@ test "framing structs: Sender, FramedContentTbs, AuthContent, Transcript, Public
     epoch: 12UL,
     sender: @types.Sender::Member(0U),
     authenticated_data: b"",
-    content: @types.FramedContentBody::Commit({ proposals: [], path: None }),
+    content: @types.FramedContentBody::Commit({ proposals: [], path: None, }),
   }
   let cthi : @types.ConfirmedTranscriptHashInput = {
     wire_format: @types.WireFormat::MlsPrivateMessage,
@@ -578,7 +592,10 @@ test "framing structs: Sender, FramedContentTbs, AuthContent, Transcript, Public
   let ithi : @types.InterimTranscriptHashInput = {
     confirmation_tag: b"\xBE\xEF\x01\x02",
   }
-  assert_eq(@types.InterimTranscriptHashInput::from_bytes(ithi.to_bytes()), ithi)
+  assert_eq(
+    @types.InterimTranscriptHashInput::from_bytes(ithi.to_bytes()),
+    ithi,
+  )
 
   // Commit auth requires confirmation_tag; non-commit forbids it
   let missing_tag : @types.FramedContentAuthData = {
@@ -601,7 +618,7 @@ test "PrivateMessageContent padding roundtrip and non-zero padding rejection" {
       @types.ContentType::Application,
       {
         content: @types.FramedContentBody::Application(b"secret payload"),
-        auth: { signature: b"\x01\x02\x03\x04", confirmation_tag: None },
+        auth: { signature: b"\x01\x02\x03\x04", confirmation_tag: None, },
         padding_len: 0,
       },
     ),
@@ -609,14 +626,14 @@ test "PrivateMessageContent padding roundtrip and non-zero padding rejection" {
       @types.ContentType::Proposal,
       {
         content: @types.FramedContentBody::Proposal(@types.Proposal::Remove(3U)),
-        auth: { signature: b"\x05\x06", confirmation_tag: None },
+        auth: { signature: b"\x05\x06", confirmation_tag: None, },
         padding_len: 1,
       },
     ),
     (
       @types.ContentType::Commit,
       {
-        content: @types.FramedContentBody::Commit({ proposals: [], path: None }),
+        content: @types.FramedContentBody::Commit({ proposals: [], path: None, }),
         auth: {
           signature: b"\x07\x08",
           confirmation_tag: Some(b"\x09\x0A\x0B\x0C"),
@@ -645,7 +662,7 @@ test "PrivateMessageContent padding roundtrip and non-zero padding rejection" {
   // Negative padding_len rejected on encode
   let neg_pad : @types.PrivateMessageContent = {
     content: @types.FramedContentBody::Application(b""),
-    auth: { signature: b"", confirmation_tag: None },
+    auth: { signature: b"", confirmation_tag: None, },
     padding_len: -1,
   }
   assert_tls_err(@tls.TlsError::LengthMismatch, () => neg_pad.to_bytes())
@@ -671,7 +688,7 @@ test "PrivateContentAad, MlsSenderData, MlsSenderDataAad roundtrip and validatio
   assert_eq(@types.MlsSenderData::from_bytes(sd_bytes), sd)
 
   // reuse_guard length != 4 must fail on encode
-  let bad_sd : @types.MlsSenderData = { ..sd, reuse_guard: b"\x01\x02\x03" }
+  let bad_sd : @types.MlsSenderData = { ..sd, reuse_guard: b"\x01\x02\x03", }
   assert_tls_err(@tls.TlsError::LengthMismatch, () => bad_sd.to_bytes())
 
   let sda : @types.MlsSenderDataAad = {
@@ -719,10 +736,7 @@ test "from_bytes rejects trailing garbage bytes across all decoders" {
     @types.GroupSecrets::from_bytes(raw_gs)
   })
 
-  let raw_commit = append_trailing_byte(
-    @tls.bytes_from_hex(v0.commit),
-    b'\xFF',
-  )
+  let raw_commit = append_trailing_byte(@tls.bytes_from_hex(v0.commit), b'\xFF')
   assert_tls_err(@tls.TlsError::TrailingData, () => {
     @types.Commit::from_bytes(raw_commit)
   })
@@ -768,10 +782,12 @@ test "from_bytes rejects trailing garbage bytes across all decoders" {
     reuse_guard: b"\x01\x02\x03\x04",
   }
   assert_tls_err(@tls.TlsError::TrailingData, () => {
-    @types.MlsSenderData::from_bytes(append_trailing_byte(sd.to_bytes(), b'\x00'))
+    @types.MlsSenderData::from_bytes(
+      append_trailing_byte(sd.to_bytes(), b'\x00'),
+    )
   })
 
-  let ext : @types.Extension = { extension_type: 1U, extension_data: b"x" }
+  let ext : @types.Extension = { extension_type: 1U, extension_data: b"x", }
   assert_tls_err(@tls.TlsError::TrailingData, () => {
     @types.Extension::from_bytes(append_trailing_byte(ext.to_bytes(), b'\x00'))
   })

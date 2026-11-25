@@ -30,7 +30,7 @@ pub fn HpkeCiphertext::decode(
 ) -> HpkeCiphertext raise @tls.TlsError {
   let kem_output = r.read_opaque()
   let ciphertext = r.read_opaque()
-  { kem_output, ciphertext }
+  { kem_output, ciphertext, }
 }
 
 ///|
@@ -162,10 +162,10 @@ pub fn ResumptionPskUsage::from_bytes(
 pub(all) enum PreSharedKeyId {
   External(psk_id~ : Bytes, psk_nonce~ : Bytes)
   Resumption(
-    usage~ : UInt,
+    usage~ : UInt32,
     psk_group_id~ : Bytes,
     psk_epoch~ : UInt64,
-    psk_nonce~ : Bytes
+    psk_nonce~ : Bytes,
   )
 }
 
@@ -182,9 +182,7 @@ pub fn PreSharedKeyId::encode(
     }
     Resumption(usage~, psk_group_id~, psk_epoch~, psk_nonce~) => {
       if usage < 1U || usage > 3U {
-        raise @tls.TlsError::InvalidEnum(
-          "invalid ResumptionPskUsage: \{usage}",
-        )
+        raise @tls.TlsError::InvalidEnum("invalid ResumptionPskUsage: \{usage}")
       }
       PskType::Resumption.encode(w)
       w.write_u8(usage.to_byte())

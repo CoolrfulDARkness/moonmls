@@ -1,7 +1,7 @@
 ///|
 /// Returns the exponent of the largest power of 2 less than or equal to `x`.
 /// Returns `0U` when `x == 0U`.
-pub fn log2(x : UInt) -> UInt {
+pub fn log2(x : UInt32) -> UInt32 {
   if x == 0U {
     return 0U
   }
@@ -17,7 +17,7 @@ pub fn log2(x : UInt) -> UInt {
 ///|
 /// Returns the level of node `x` in the binary tree (0 for leaves, number of
 /// trailing 1-bits in the binary representation of `x`).
-pub fn level(x : UInt) -> UInt {
+pub fn level(x : UInt32) -> UInt32 {
   let mut k = 0U
   let mut v = x
   while (v & 1U) == 1U {
@@ -29,20 +29,20 @@ pub fn level(x : UInt) -> UInt {
 
 ///|
 /// Returns `true` if `x` is a leaf node (even node index).
-pub fn is_leaf(x : UInt) -> Bool {
+pub fn is_leaf(x : UInt32) -> Bool {
   (x & 1U) == 0U
 }
 
 ///|
 /// Converts a 0-based leaf index to its node index (`2 * leaf_index`).
-pub fn leaf_to_node(leaf_index : UInt) -> UInt {
+pub fn leaf_to_node(leaf_index : UInt32) -> UInt32 {
   leaf_index << 1
 }
 
 ///|
 /// Converts a node index to its 0-based leaf index if it is a leaf, or `None`
 /// for internal nodes.
-pub fn node_to_leaf(node_index : UInt) -> UInt? {
+pub fn node_to_leaf(node_index : UInt32) -> UInt32? {
   if (node_index & 1U) == 0U {
     Some(node_index >> 1)
   } else {
@@ -53,7 +53,7 @@ pub fn node_to_leaf(node_index : UInt) -> UInt? {
 ///|
 /// Returns the number of nodes needed to represent a tree with `n_leaves`
 /// leaves (RFC 9420 Appendix C `node_width`).
-pub fn node_width(n_leaves : UInt) -> UInt {
+pub fn node_width(n_leaves : UInt32) -> UInt32 {
   if n_leaves == 0U {
     0U
   } else {
@@ -63,7 +63,7 @@ pub fn node_width(n_leaves : UInt) -> UInt {
 
 ///|
 /// Returns the number of leaves in a tree with `n_nodes` nodes.
-pub fn leaf_count(n_nodes : UInt) -> UInt {
+pub fn leaf_count(n_nodes : UInt32) -> UInt32 {
   if n_nodes == 0U {
     0U
   } else {
@@ -73,7 +73,7 @@ pub fn leaf_count(n_nodes : UInt) -> UInt {
 
 ///|
 /// Returns the root node index of a tree with `n_leaves` leaves.
-pub fn root(n_leaves : UInt) -> UInt {
+pub fn root(n_leaves : UInt32) -> UInt32 {
   let w = node_width(n_leaves)
   if w == 0U {
     return 0U
@@ -83,7 +83,7 @@ pub fn root(n_leaves : UInt) -> UInt {
 
 ///|
 /// Returns the left child of an internal node `x`, or `None` if `x` is a leaf.
-pub fn left(x : UInt) -> UInt? {
+pub fn left(x : UInt32) -> UInt32? {
   let k = level(x)
   if k == 0U || k >= 32U {
     None
@@ -94,7 +94,7 @@ pub fn left(x : UInt) -> UInt? {
 
 ///|
 /// Returns the right child of an internal node `x`, or `None` if `x` is a leaf.
-pub fn right(x : UInt) -> UInt? {
+pub fn right(x : UInt32) -> UInt32? {
   let k = level(x)
   if k == 0U || k >= 32U {
     None
@@ -104,7 +104,7 @@ pub fn right(x : UInt) -> UInt? {
 }
 
 ///|
-fn parent_step(x : UInt) -> UInt {
+fn parent_step(x : UInt32) -> UInt32 {
   let k = level(x)
   let b = (x >> (k + 1U).reinterpret_as_int()) & 1U
   (x | (1U << k.reinterpret_as_int())) ^ (b << (k + 1U).reinterpret_as_int())
@@ -113,7 +113,7 @@ fn parent_step(x : UInt) -> UInt {
 ///|
 /// Returns the immediate parent of node `x` in a tree with `n_leaves` leaves,
 /// or `None` if `x` is the root (or out of bounds).
-pub fn parent(x : UInt, n_leaves : UInt) -> UInt? {
+pub fn parent(x : UInt32, n_leaves : UInt32) -> UInt32? {
   if n_leaves == 0U {
     return None
   }
@@ -131,7 +131,7 @@ pub fn parent(x : UInt, n_leaves : UInt) -> UInt? {
 ///|
 /// Returns the sibling of node `x` in a tree with `n_leaves` leaves, or `None`
 /// if `x` is the root (or out of bounds).
-pub fn sibling(x : UInt, n_leaves : UInt) -> UInt? {
+pub fn sibling(x : UInt32, n_leaves : UInt32) -> UInt32? {
   match parent(x, n_leaves) {
     None => None
     Some(p) =>
@@ -159,8 +159,8 @@ pub fn sibling(x : UInt, n_leaves : UInt) -> UInt? {
 ///|
 /// Returns the direct path of node `x` (from `parent(x)` up to and including
 /// `root(n_leaves)`). Returns an empty array for the root or out-of-bounds nodes.
-pub fn direct_path(x : UInt, n_leaves : UInt) -> Array[UInt] {
-  let path : Array[UInt] = []
+pub fn direct_path(x : UInt32, n_leaves : UInt32) -> Array[UInt32] {
+  let path : Array[UInt32] = []
   let mut cur = x
   while true {
     match parent(cur, n_leaves) {
@@ -177,8 +177,8 @@ pub fn direct_path(x : UInt, n_leaves : UInt) -> Array[UInt] {
 ///|
 /// Returns the copath of node `x`: the siblings of each node on the path from
 /// `x` up to (but not including) the root.
-pub fn copath(x : UInt, n_leaves : UInt) -> Array[UInt] {
-  let out : Array[UInt] = []
+pub fn copath(x : UInt32, n_leaves : UInt32) -> Array[UInt32] {
+  let out : Array[UInt32] = []
   let mut cur = x
   while true {
     match parent(cur, n_leaves) {
@@ -196,7 +196,7 @@ pub fn copath(x : UInt, n_leaves : UInt) -> Array[UInt] {
 }
 
 ///|
-fn safe_shr(v : UInt, shift : UInt) -> UInt {
+fn safe_shr(v : UInt32, shift : UInt32) -> UInt32 {
   if shift >= 32U {
     0U
   } else {
@@ -207,7 +207,7 @@ fn safe_shr(v : UInt, shift : UInt) -> UInt {
 ///|
 /// Returns the lowest common ancestor of nodes `x` and `y` in the infinite
 /// full binary tree (RFC 9420 Appendix C `common_ancestor_semantic`).
-pub fn common_ancestor(x : UInt, y : UInt) -> UInt {
+pub fn common_ancestor(x : UInt32, y : UInt32) -> UInt32 {
   let lx = level(x) + 1U
   let ly = level(y) + 1U
   if lx <= ly && safe_shr(x, ly) == safe_shr(y, ly) {
@@ -230,7 +230,7 @@ pub fn common_ancestor(x : UInt, y : UInt) -> UInt {
 ///|
 /// Returns the inclusive `(min_leaf, max_leaf)` leaf index range covered by
 /// the subtree rooted at node `x`.
-pub fn subtree_range(x : UInt) -> (UInt, UInt) {
+pub fn subtree_range(x : UInt32) -> (UInt32, UInt32) {
   let k = level(x)
   let min_leaf = safe_shr(x, k + 1U) << k.reinterpret_as_int()
   let max_leaf = min_leaf + (1U << k.reinterpret_as_int()) - 1U

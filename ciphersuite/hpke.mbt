@@ -2,10 +2,10 @@
 let hpke_version_label : Bytes = b"HPKE-v1"
 
 ///|
-let hpke_kem_id_x25519 : UInt = 0x0020U
+let hpke_kem_id_x25519 : UInt32 = 0x0020U
 
 ///|
-let hpke_kdf_id_sha256 : UInt = 0x0001U
+let hpke_kdf_id_sha256 : UInt32 = 0x0001U
 
 ///|
 let hpke_mode_base : Bytes = b"\x00"
@@ -44,7 +44,7 @@ fn labeled_expand(
   prk : Bytes,
   label : Bytes,
   info : Bytes,
-  length : Int,
+  length : Int32,
 ) -> Bytes raise CsError {
   if length < 0 || length > 0xFFFF {
     raise InvalidLength("HPKE LabeledExpand length out of uint16 range")
@@ -56,7 +56,7 @@ fn labeled_expand(
     label,
     info,
   ])
-  try @crypto.hkdf_expand(prk, labeled_info, length) catch {
+  @crypto.hkdf_expand(prk, labeled_info, length) catch {
     e => raise CryptoError(e)
   }
 }
@@ -74,9 +74,7 @@ fn extract_and_expand(dh : Bytes, kem_context : Bytes) -> Bytes raise CsError {
 pub fn kem_derive_key_pair(ikm : Bytes) -> (Bytes, Bytes) raise CsError {
   let dkp_prk = labeled_extract(kem_suite_id, b"", b"dkp_prk", ikm)
   let sk = labeled_expand(kem_suite_id, dkp_prk, b"sk", b"", 32)
-  let pk = try @crypto.x25519_public_key(sk) catch {
-    e => raise CryptoError(e)
-  }
+  let pk = @crypto.x25519_public_key(sk) catch { e => raise CryptoError(e) }
   (sk, pk)
 }
 
@@ -93,12 +91,8 @@ fn dhkem_encap_with_ephemeral(
   if sk_e.length() != 32 {
     raise InvalidLength("HPKE ephemeral secret key must be 32 bytes")
   }
-  let enc = try @crypto.x25519_public_key(sk_e) catch {
-    e => raise CryptoError(e)
-  }
-  let dh = try @crypto.x25519_dh(sk_e, pk_r) catch {
-    e => raise CryptoError(e)
-  }
+  let enc = @crypto.x25519_public_key(sk_e) catch { e => raise CryptoError(e) }
+  let dh = @crypto.x25519_dh(sk_e, pk_r) catch { e => raise CryptoError(e) }
   let kem_context = @tls.bytes_concat([enc, pk_r])
   let shared_secret = extract_and_expand(dh, kem_context)
   (shared_secret, enc)
@@ -114,12 +108,8 @@ fn dhkem_decap(enc : Bytes, sk_r : Bytes) -> Bytes raise CsError {
   if sk_r.length() != 32 {
     raise InvalidLength("HPKE recipient secret key must be 32 bytes")
   }
-  let dh = try @crypto.x25519_dh(sk_r, enc) catch {
-    e => raise CryptoError(e)
-  }
-  let pk_r = try @crypto.x25519_public_key(sk_r) catch {
-    e => raise CryptoError(e)
-  }
+  let dh = @crypto.x25519_dh(sk_r, enc) catch { e => raise CryptoError(e) }
+  let pk_r = @crypto.x25519_public_key(sk_r) catch { e => raise CryptoError(e) }
   let kem_context = @tls.bytes_concat([enc, pk_r])
   extract_and_expand(dh, kem_context)
 }

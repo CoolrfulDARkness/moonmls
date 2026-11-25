@@ -4,7 +4,7 @@ fn hex(s : String) -> Bytes raise {
 }
 
 ///|
-fn flip_byte(data : Bytes, idx : Int) -> Bytes {
+fn flip_byte(data : Bytes, idx : Int32) -> Bytes {
   Bytes::makei(data.length(), fn(i) {
     if i == idx {
       (data[i].to_int() ^ 0x01).to_byte()
@@ -484,10 +484,10 @@ test "MAC, RefHash helpers, and direct AEAD round-trip" {
     let ct = cs.aead_seal(key, nonce, aad, pt)
     assert_eq(ct.length(), pt.length() + cs.aead_tag_len())
     assert_eq(cs.aead_open(key, nonce, aad, ct), pt)
+    assert_decryption_failed(() => cs.aead_open(key, nonce, b"wrong-header", ct))
     assert_decryption_failed(() => {
-      cs.aead_open(key, nonce, b"wrong-header", ct)
+      cs.aead_open(key, nonce, aad, flip_byte(ct, 0))
     })
-    assert_decryption_failed(() => cs.aead_open(key, nonce, aad, flip_byte(ct, 0)))
   }
 }
 
@@ -551,14 +551,16 @@ test "HPKE and CipherSuite error paths and empty payloads" {
   }
 
   // Invalid AEAD key length for CS1 (needs 16, given 32) and CS3 (needs 32, given 16)
-  try cs1.aead_seal(Bytes::make(32, b'\x01'), Bytes::make(12, b'\x00'), b"", b"a")
+  try
+    cs1.aead_seal(Bytes::make(32, b'\x01'), Bytes::make(12, b'\x00'), b"", b"a")
   catch {
     @ciphersuite.CryptoError(@crypto.InvalidKeyLength) => ()
     other => fail("expected CryptoError(InvalidKeyLength), got \{other}")
   } noraise {
     _ => fail("expected CryptoError(InvalidKeyLength)")
   }
-  try cs3.aead_seal(Bytes::make(16, b'\x01'), Bytes::make(12, b'\x00'), b"", b"a")
+  try
+    cs3.aead_seal(Bytes::make(16, b'\x01'), Bytes::make(12, b'\x00'), b"", b"a")
   catch {
     @ciphersuite.CryptoError(@crypto.InvalidKeyLength) => ()
     other => fail("expected CryptoError(InvalidKeyLength), got \{other}")

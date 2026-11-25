@@ -15,18 +15,18 @@ pub(all) suberror GroupError {
   ConfirmationTagMismatch
   GroupIdMismatch
   EpochMismatch(UInt64, UInt64)
-  UnknownSender(UInt)
+  UnknownSender(UInt32)
   MemberRemoved
   InvalidProposal(String)
   InvalidCommit(String)
-  MissingPrivateKey(UInt)
+  MissingPrivateKey(UInt32)
   CannotRemoveSelf
-  UnsupportedProtocolVersion(UInt)
+  UnsupportedProtocolVersion(UInt32)
   CipherSuiteMismatch
 }
 
 ///|
-pub impl Show for GroupError with output(self, logger) {
+pub impl Show for GroupError with fn output(self, logger) {
   match self {
     TlsError(e) => {
       logger.write_string("TlsError(")

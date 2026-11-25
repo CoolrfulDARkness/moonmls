@@ -32,12 +32,12 @@ let aes_sbox : FixedArray[Byte] = [
 ]
 
 ///|
-let aes_rcon : FixedArray[UInt] = [
+let aes_rcon : FixedArray[UInt32] = [
   0x01U, 0x02U, 0x04U, 0x08U, 0x10U, 0x20U, 0x40U, 0x80U, 0x1bU, 0x36U,
 ]
 
 ///|
-fn aes_sub_word(w : UInt) -> UInt {
+fn aes_sub_word(w : UInt32) -> UInt32 {
   let b0 = aes_sbox[((w >> 24) & 0xFFU).reinterpret_as_int()].to_uint()
   let b1 = aes_sbox[((w >> 16) & 0xFFU).reinterpret_as_int()].to_uint()
   let b2 = aes_sbox[((w >> 8) & 0xFFU).reinterpret_as_int()].to_uint()
@@ -46,12 +46,12 @@ fn aes_sub_word(w : UInt) -> UInt {
 }
 
 ///|
-fn aes_rot_word(w : UInt) -> UInt {
+fn aes_rot_word(w : UInt32) -> UInt32 {
   (w << 8) | (w >> 24)
 }
 
 ///|
-fn aes128_expand_key(key : Bytes) -> FixedArray[UInt] {
+fn aes128_expand_key(key : Bytes) -> FixedArray[UInt32] {
   let w = FixedArray::make(44, 0U)
   for i = 0; i < 4; i = i + 1 {
     w[i] = load_be32(key, i * 4)
@@ -67,7 +67,7 @@ fn aes128_expand_key(key : Bytes) -> FixedArray[UInt] {
 }
 
 ///|
-fn aes_xtime(a : Int) -> Int {
+fn aes_xtime(a : Int32) -> Int32 {
   let shifted = a << 1
   if (a & 0x80) != 0 {
     (shifted ^ 0x1b) & 0xff
@@ -79,8 +79,8 @@ fn aes_xtime(a : Int) -> Int {
 ///|
 fn aes_add_round_key(
   s : FixedArray[Byte],
-  rk : FixedArray[UInt],
-  round : Int,
+  rk : FixedArray[UInt32],
+  round : Int32,
 ) -> Unit {
   let base = round * 4
   for c = 0; c < 4; c = c + 1 {
@@ -141,7 +141,7 @@ fn aes_mix_columns(s : FixedArray[Byte]) -> Unit {
 
 ///|
 fn aes128_encrypt_block(
-  rk : FixedArray[UInt],
+  rk : FixedArray[UInt32],
   input : FixedArray[Byte],
 ) -> FixedArray[Byte] {
   let s = FixedArray::make(16, b'\x00')
@@ -200,8 +200,8 @@ fn ghash_update_bytes(
   h_hi : UInt64,
   h_lo : UInt64,
   data : Bytes,
-  start : Int,
-  len : Int,
+  start : Int32,
+  len : Int32,
 ) -> (UInt64, UInt64) {
   let mut cur_hi = y_hi
   let mut cur_lo = y_lo
@@ -230,11 +230,11 @@ fn ghash_update_bytes(
 
 ///|
 fn gcm_compute_tag(
-  rk : FixedArray[UInt],
+  rk : FixedArray[UInt32],
   j0 : FixedArray[Byte],
   aad : Bytes,
   ct : Bytes,
-  ct_len : Int,
+  ct_len : Int32,
 ) -> Bytes {
   let zero_block = FixedArray::make(16, b'\x00')
   let h_block = aes128_encrypt_block(rk, zero_block)
@@ -272,10 +272,10 @@ fn gcm_inc32(ctr : FixedArray[Byte]) -> Unit {
 
 ///|
 fn gcm_gctr(
-  rk : FixedArray[UInt],
+  rk : FixedArray[UInt32],
   j0 : FixedArray[Byte],
   input : Bytes,
-  len : Int,
+  len : Int32,
 ) -> FixedArray[Byte] {
   let out = FixedArray::make(len, b'\x00')
   let ctr = FixedArray::make(16, b'\x00')

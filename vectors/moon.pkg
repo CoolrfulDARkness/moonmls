@@ -1,10 +1,10 @@
 import {
-  "CoolrfulDARkness/moonmls/tls" @tls,
-  "CoolrfulDARkness/moonmls/treemath" @treemath,
-  "CoolrfulDARkness/moonmls/crypto" @crypto,
+  "CoolrfulDARkness/moonmls/tls",
+  "CoolrfulDARkness/moonmls/treemath",
+  "CoolrfulDARkness/moonmls/crypto",
   "CoolrfulDARkness/moonmls/ciphersuite" @cs,
-  "CoolrfulDARkness/moonmls/types" @types,
-  "CoolrfulDARkness/moonmls/tree" @tree,
-  "CoolrfulDARkness/moonmls/schedule" @schedule,
-  "CoolrfulDARkness/moonmls/group" @group,
+  "CoolrfulDARkness/moonmls/types",
+  "CoolrfulDARkness/moonmls/tree",
+  "CoolrfulDARkness/moonmls/schedule",
+  "CoolrfulDARkness/moonmls/group",
 } for "test"

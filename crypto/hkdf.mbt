@@ -35,7 +35,7 @@ pub fn hkdf_extract(salt : Bytes, ikm : Bytes) -> Bytes {
 pub fn hkdf_expand(
   prk : Bytes,
   info : Bytes,
-  length : Int,
+  length : Int32,
 ) -> Bytes raise CryptoError {
   if length < 0 {
     raise InvalidInputLength

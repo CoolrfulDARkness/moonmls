@@ -75,7 +75,7 @@ fn LeafNode::encode_body_before_sig(
 pub fn LeafNode::encode_tbs(
   self : LeafNode,
   group_id : Bytes?,
-  leaf_index : UInt?,
+  leaf_index : UInt32?,
 ) -> Bytes raise @tls.TlsError {
   let w = @tls.Writer::new()
   self.encode_body_before_sig(w)
@@ -153,7 +153,7 @@ pub fn LeafNode::from_bytes(b : Bytes) -> LeafNode raise @tls.TlsError {
 pub(all) struct ParentNode {
   encryption_key : Bytes
   parent_hash : Bytes
-  unmerged_leaves : Array[UInt]
+  unmerged_leaves : Array[UInt32]
 }
 
 ///|
@@ -178,7 +178,7 @@ pub fn ParentNode::decode(r : @tls.Reader) -> ParentNode raise @tls.TlsError {
   let encryption_key = r.read_opaque()
   let parent_hash = r.read_opaque()
   let unmerged_leaves = decode_u32_vec(r)
-  { encryption_key, parent_hash, unmerged_leaves }
+  { encryption_key, parent_hash, unmerged_leaves, }
 }
 
 ///|
@@ -260,9 +260,7 @@ pub fn ratchet_tree_to_bytes(tree : RatchetTree) -> Bytes raise @tls.TlsError {
 }
 
 ///|
-pub fn decode_ratchet_tree(
-  r : @tls.Reader,
-) -> RatchetTree raise @tls.TlsError {
+pub fn decode_ratchet_tree(r : @tls.Reader) -> RatchetTree raise @tls.TlsError {
   r.read_vec(sub => sub.read_optional(s => Node::decode(s)))
 }
 
