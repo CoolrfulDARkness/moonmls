@@ -1925,3 +1925,1165 @@ test "SEC-26: Cryptographic Forward Secrecy (FS) & Post-Compromise Security (PCS
     b"sec-26-cs3",
   )
 }
+
+///|
+/// Re-signs a `LeafNode` (KeyPackage source) and wrapping `KeyPackage` using
+/// `sig_priv` so structural/capability/key rejections are tested independently
+/// of signature validity.
+fn sec_resign_key_package(
+  cs : @cs.CipherSuite,
+  base_kp : @types.KeyPackage,
+  sig_priv : Bytes,
+  init_key : Bytes,
+  leaf_enc_key : Bytes,
+  capabilities : @types.Capabilities,
+  leaf_extensions : Array[@types.Extension],
+  kp_extensions : Array[@types.Extension],
+) -> @types.KeyPackage raise {
+  let unsigned_leaf : @types.LeafNode = {
+    encryption_key: leaf_enc_key,
+    signature_key: base_kp.leaf_node.signature_key,
+    credential: base_kp.leaf_node.credential,
+    capabilities,
+    leaf_node_source: @types.LeafNodeSource::KeyPackage,
+    lifetime: base_kp.leaf_node.lifetime,
+    parent_hash: None,
+    extensions: leaf_extensions,
+    signature: b"",
+  }
+  let leaf_sig = cs.sign_with_label(
+    sig_priv,
+    "LeafNodeTBS",
+    unsigned_leaf.encode_tbs(None, None),
+  )
+  let signed_leaf : @types.LeafNode = {
+    encryption_key: unsigned_leaf.encryption_key,
+    signature_key: unsigned_leaf.signature_key,
+    credential: unsigned_leaf.credential,
+    capabilities: unsigned_leaf.capabilities,
+    leaf_node_source: unsigned_leaf.leaf_node_source,
+    lifetime: unsigned_leaf.lifetime,
+    parent_hash: unsigned_leaf.parent_hash,
+    extensions: unsigned_leaf.extensions,
+    signature: leaf_sig,
+  }
+  let unsigned_kp : @types.KeyPackage = {
+    version: base_kp.version,
+    cipher_suite: base_kp.cipher_suite,
+    init_key,
+    leaf_node: signed_leaf,
+    extensions: kp_extensions,
+    signature: b"",
+  }
+  let kp_sig = cs.sign_with_label(
+    sig_priv,
+    "KeyPackageTBS",
+    unsigned_kp.encode_tbs(),
+  )
+  {
+    version: unsigned_kp.version,
+    cipher_suite: unsigned_kp.cipher_suite,
+    init_key: unsigned_kp.init_key,
+    leaf_node: unsigned_kp.leaf_node,
+    extensions: unsigned_kp.extensions,
+    signature: kp_sig,
+  }
+}
+
+///|
+/// Builds a `Commit` `LeafNode` with a custom `encryption_key` and computes the
+/// exact `parent_hash` chain top-down for a given `path_nodes` list, signing it
+/// with `sign_priv` so `merge_update_path_nodes` reaches key validation checks.
+fn sec_forge_signed_update_path(
+  cs : @cs.CipherSuite,
+  base_tree : @tree.RatchetTreeState,
+  sender_leaf : UInt32,
+  group_id : Bytes,
+  sign_priv : Bytes,
+  base_leaf : @types.LeafNode,
+  new_leaf_enc_key : Bytes,
+  path_nodes : Array[@types.UpdatePathNode],
+) -> @types.UpdatePath raise {
+  let work = base_tree.clone()
+  let n_leaves = work.n_leaves()
+  let fdp = work.filtered_direct_path(sender_leaf)
+  let dp = @treemath.direct_path(@treemath.leaf_to_node(sender_leaf), n_leaves)
+  for i = 0; i < dp.length(); i = i + 1 {
+    work.nodes[dp[i].reinterpret_as_int()] = None
+  }
+  let k = fdp.length()
+  let mut cur_ph = b""
+  for rev = 0; rev < k; rev = rev + 1 {
+    let i = k - 1 - rev
+    let (d_node, c_node) = fdp[i]
+    let enc_key = path_nodes[i].encryption_key
+    work.nodes[d_node.reinterpret_as_int()] = Some(
+      @types.Node::Parent({
+        encryption_key: enc_key,
+        parent_hash: cur_ph,
+        unmerged_leaves: [],
+      }),
+    )
+    let sibling_hash = work.node_hash(cs, c_node)
+    let w = @tls.Writer::new()
+    w.write_opaque(enc_key)
+    w.write_opaque(cur_ph)
+    w.write_opaque(sibling_hash)
+    cur_ph = cs.hash(w.to_bytes())
+  }
+  let unsigned_leaf : @types.LeafNode = {
+    encryption_key: new_leaf_enc_key,
+    signature_key: base_leaf.signature_key,
+    credential: base_leaf.credential,
+    capabilities: base_leaf.capabilities,
+    leaf_node_source: @types.LeafNodeSource::Commit,
+    lifetime: None,
+    parent_hash: Some(cur_ph),
+    extensions: base_leaf.extensions,
+    signature: b"",
+  }
+  let sig = cs.sign_with_label(
+    sign_priv,
+    "LeafNodeTBS",
+    unsigned_leaf.encode_tbs(Some(group_id), Some(sender_leaf)),
+  )
+  let signed_leaf : @types.LeafNode = {
+    encryption_key: unsigned_leaf.encryption_key,
+    signature_key: unsigned_leaf.signature_key,
+    credential: unsigned_leaf.credential,
+    capabilities: unsigned_leaf.capabilities,
+    leaf_node_source: unsigned_leaf.leaf_node_source,
+    lifetime: unsigned_leaf.lifetime,
+    parent_hash: unsigned_leaf.parent_hash,
+    extensions: unsigned_leaf.extensions,
+    signature: sig,
+  }
+  { leaf_node: signed_leaf, nodes: path_nodes, }
+}
+
+///|
+test "SEC-27: Ed25519 identity point and order-8 small-order torsion public key signature forgery rejected" {
+  let cs = @cs.CipherSuite::X25519Aes128GcmSha256Ed25519
+  let rng = @crypto.DeterministicRng::from_seed(b"sec-27-seed")
+  // Identity point O = (0, 1): compressed [0x01, 0x00, ..., 0x00]
+  let identity_pk = @tls.bytes_from_hex(
+    "0100000000000000000000000000000000000000000000000000000000000000",
+  )
+  // Forged signature with R = O, S = 0: satisfies [0]B == O + [k]O without torsion rejection
+  let forged_sig_o = @tls.bytes_concat([identity_pk, Bytes::make(32, b'\x00')])
+  // 1. Direct Ed25519 verification rejects identity public key
+  assert_false(@crypto.ed25519_verify(identity_pk, b"", forged_sig_o))
+  assert_false(
+    @crypto.ed25519_verify(identity_pk, b"forged MLS Commit", forged_sig_o),
+  )
+  let mut id_raised = false
+  @crypto.ed25519_verify_or_raise(identity_pk, b"forged", forged_sig_o) catch {
+    @crypto.CryptoError::InvalidSignature => id_raised = true
+    _ => fail("expected CryptoError::InvalidSignature for identity public key")
+  }
+  assert_true(id_raised)
+  assert_false(
+    cs.verify_with_label(identity_pk, "KeyPackageTBS", b"any", forged_sig_o),
+  )
+  // 2. All remaining 7 canonical 8-torsion points (order 2, 4, and 8) rejected
+  let small_order_pks : Array[Bytes] = [
+    // Order 2: (0, -1)
+    @tls.bytes_from_hex(
+      "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+    ),
+    // Order 4: (+sqrt(-1), 0) and (-sqrt(-1), 0)
+    @tls.bytes_from_hex(
+      "0000000000000000000000000000000000000000000000000000000000000000",
+    ),
+    @tls.bytes_from_hex(
+      "0000000000000000000000000000000000000000000000000000000000000080",
+    ),
+    // Order 8: four points of exact order 8
+    @tls.bytes_from_hex(
+      "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+    ),
+    @tls.bytes_from_hex(
+      "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa",
+    ),
+    @tls.bytes_from_hex(
+      "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+    ),
+    @tls.bytes_from_hex(
+      "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85",
+    ),
+  ]
+  for i = 0; i < small_order_pks.length(); i = i + 1 {
+    let pk = small_order_pks[i]
+    // Sweep 32 messages so k mod 8 == 0 collisions are guaranteed to be hit
+    for m = 0; m < 32; m = m + 1 {
+      let msg = Bytes::make(1, m.to_byte())
+      assert_false(@crypto.ed25519_verify(pk, msg, forged_sig_o))
+    }
+  }
+  // 3. End-to-end KeyPackage forgery using identity_pk and order-8 torsion pk with R=O, S=0
+  let alice = @group.MlsGroup::create(cs, b"sec-27-gid", b"alice", rng)
+  let base_b = @group.KeyPackageBundle::generate(cs, b"forger", rng)
+  let base_kp = base_b.key_package
+  let forged_pks = [identity_pk, small_order_pks[3], small_order_pks[5]]
+  for i = 0; i < forged_pks.length(); i = i + 1 {
+    let bad_leaf : @types.LeafNode = {
+      encryption_key: base_kp.leaf_node.encryption_key,
+      signature_key: forged_pks[i],
+      credential: base_kp.leaf_node.credential,
+      capabilities: base_kp.leaf_node.capabilities,
+      leaf_node_source: base_kp.leaf_node.leaf_node_source,
+      lifetime: base_kp.leaf_node.lifetime,
+      parent_hash: base_kp.leaf_node.parent_hash,
+      extensions: base_kp.leaf_node.extensions,
+      signature: forged_sig_o,
+    }
+    let forged_kp : @types.KeyPackage = {
+      version: base_kp.version,
+      cipher_suite: base_kp.cipher_suite,
+      init_key: base_kp.init_key,
+      leaf_node: bad_leaf,
+      extensions: base_kp.extensions,
+      signature: forged_sig_o,
+    }
+    let mut kp_err = false
+    @group.verify_key_package(cs, forged_kp) catch {
+      @group.GroupError::InvalidKeyPackage(_) => kp_err = true
+      _ => fail("expected InvalidKeyPackage for torsion signature_key")
+    }
+    assert_true(kp_err)
+    let mut prop_err = false
+    try {
+      let _ = alice.propose_add(forged_kp, rng)
+    } catch {
+      @group.GroupError::InvalidKeyPackage(_) => prop_err = true
+      _ =>
+        fail(
+          "expected InvalidKeyPackage in propose_add for torsion signature_key",
+        )
+    }
+    assert_true(prop_err)
+  }
+}
+
+///|
+test "SEC-28: Malicious UpdatePath duplicate encryption_key and low-order public key rejected with zero state pollution" {
+  let cs = @cs.CipherSuite::X25519Aes128GcmSha256Ed25519
+  let gid = b"sec-28-gid"
+  let (alice, bob, alice_bundle, bob_bundle, welcome, rng) = setup_two_member_group(
+    cs, gid, b"sec-28-seed",
+  )
+  let verified = @group.verify_and_decrypt_welcome(
+    cs,
+    welcome,
+    bob_bundle.init_priv,
+    bob_bundle.key_package,
+    alice_bundle.key_package.leaf_node.signature_key,
+  )
+  let rt = @tree.RatchetTreeState::from_nodes(alice.ratchet_tree_nodes())
+  let nodes_before = rt.to_nodes()
+  let th_before = rt.tree_hash(cs)
+  let alice_leaf = match rt.get_leaf(0U) {
+    Some(l) => l
+    None => fail("expected Alice leaf 0")
+  }
+  let bob_leaf = match rt.get_leaf(1U) {
+    Some(l) => l
+    None => fail("expected Bob leaf 1")
+  }
+  // Generate a baseline genuine UpdatePath from Alice on a cloned tree
+  let rt_gen = rt.clone()
+  let prepared = rt_gen.prepare_update_path_tree(
+    cs,
+    0U,
+    alice_leaf,
+    alice_bundle.signature_priv,
+    gid,
+    rng.next_bytes(32),
+  )
+  let dummy_gc = verified.group_info.group_context.to_bytes()
+  let genuine_up = rt_gen.encrypt_path_secrets(
+    cs,
+    0U,
+    prepared,
+    dummy_gc,
+    [],
+    rng,
+  )
+  let (_, fresh_leaf_pub) = cs.kem_keypair_from_ikm(rng.next_bytes(32))
+  // Case A: UpdatePath parent node duplicates Bob's leaf encryption_key (with valid parent_hash & leaf sig!)
+  let dup_parent_nodes : Array[@types.UpdatePathNode] = [
+    {
+      encryption_key: bob_leaf.encryption_key,
+      encrypted_path_secret: genuine_up.nodes[0].encrypted_path_secret,
+    },
+  ]
+  let dup_parent_up = sec_forge_signed_update_path(
+    cs,
+    rt,
+    0U,
+    gid,
+    alice_bundle.signature_priv,
+    alice_leaf,
+    fresh_leaf_pub,
+    dup_parent_nodes,
+  )
+  let mut e_dup_parent = false
+  rt.merge_update_path_nodes(cs, 0U, dup_parent_up, gid, []) catch {
+    @tree.TreeError::DuplicateKey => e_dup_parent = true
+    _ => fail("expected DuplicateKey for UpdatePath parent key collision")
+  }
+  assert_true(e_dup_parent)
+  assert_eq(rt.to_nodes(), nodes_before)
+  assert_eq(rt.tree_hash(cs), th_before)
+
+  // Case B: UpdatePath leaf reuses Alice's old leaf encryption_key (with valid parent_hash & leaf sig!)
+  let dup_self_up = sec_forge_signed_update_path(
+    cs,
+    rt,
+    0U,
+    gid,
+    alice_bundle.signature_priv,
+    alice_leaf,
+    alice_leaf.encryption_key,
+    genuine_up.nodes,
+  )
+  let mut e_dup_self = false
+  rt.merge_update_path_nodes(cs, 0U, dup_self_up, gid, []) catch {
+    @tree.TreeError::DuplicateKey => e_dup_self = true
+    _ => fail("expected DuplicateKey for UpdatePath self leaf key reuse")
+  }
+  assert_true(e_dup_self)
+  assert_eq(rt.to_nodes(), nodes_before)
+  assert_eq(rt.tree_hash(cs), th_before)
+
+  // Case C: UpdatePath parent node injects low-order X25519 point (all-zero & order-8)
+  let low_zero = Bytes::make(32, b'\x00')
+  let low_order8 = @tls.bytes_from_hex(
+    "e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800",
+  )
+  for low_pk in [low_zero, low_order8] {
+    let low_parent_up : @types.UpdatePath = {
+      leaf_node: genuine_up.leaf_node,
+      nodes: [
+        {
+          encryption_key: low_pk,
+          encrypted_path_secret: genuine_up.nodes[0].encrypted_path_secret,
+        },
+      ],
+    }
+    let mut e_low_par = false
+    rt.merge_update_path_nodes(cs, 0U, low_parent_up, gid, []) catch {
+      @tree.TreeError::CsError(
+        @cs.CsError::CryptoError(@crypto.CryptoError::LowOrderPoint),
+      ) => e_low_par = true
+      _ => fail("expected LowOrderPoint for UpdatePath parent node")
+    }
+    assert_true(e_low_par)
+    assert_eq(rt.to_nodes(), nodes_before)
+    assert_eq(rt.tree_hash(cs), th_before)
+  }
+
+  // Case D: UpdatePath leaf injects low-order X25519 point (u = 1)
+  let low_u1 = @tls.bytes_from_hex(
+    "0100000000000000000000000000000000000000000000000000000000000000",
+  )
+  let low_leaf_up : @types.UpdatePath = {
+    leaf_node: {
+      encryption_key: low_u1,
+      signature_key: genuine_up.leaf_node.signature_key,
+      credential: genuine_up.leaf_node.credential,
+      capabilities: genuine_up.leaf_node.capabilities,
+      leaf_node_source: genuine_up.leaf_node.leaf_node_source,
+      lifetime: genuine_up.leaf_node.lifetime,
+      parent_hash: genuine_up.leaf_node.parent_hash,
+      extensions: genuine_up.leaf_node.extensions,
+      signature: genuine_up.leaf_node.signature,
+    },
+    nodes: genuine_up.nodes,
+  }
+  let mut e_low_leaf = false
+  rt.merge_update_path_nodes(cs, 0U, low_leaf_up, gid, []) catch {
+    @tree.TreeError::CsError(
+      @cs.CsError::CryptoError(@crypto.CryptoError::LowOrderPoint),
+    ) => e_low_leaf = true
+    _ => fail("expected LowOrderPoint for UpdatePath leaf_node")
+  }
+  assert_true(e_low_leaf)
+  assert_eq(rt.to_nodes(), nodes_before)
+  assert_eq(rt.tree_hash(cs), th_before)
+
+  // Case E: Live MlsGroup receives signed+encrypted Commit with duplicate-key UpdatePath -> rejected, group NOT bricked!
+  let bob_auth_before = bob.epoch_authenticator()
+  let bob_th_before = bob.tree_hash()
+  let st = @tree.SecretTree::new(cs, verified.secrets.encryption_secret, 2U)
+  let (hs_key, hs_nonce) = st.handshake_key_nonce_for_generation(0U, 0U)
+  let bad_commit_fc : @types.FramedContent = {
+    group_id: gid,
+    epoch: 1UL,
+    sender: @types.Sender::Member(0U),
+    authenticated_data: b"",
+    content: @types.FramedContentBody::Commit({
+      proposals: [],
+      path: Some(dup_parent_up),
+    }),
+  }
+  let bad_commit_sig = @schedule.sign_framed_content(
+    cs,
+    alice_bundle.signature_priv,
+    @types.WireFormat::MlsPrivateMessage,
+    bad_commit_fc,
+    Some(verified.group_info.group_context),
+  )
+  let bad_commit_msg = @schedule.encrypt_private_message_with_keys(
+    cs,
+    verified.secrets.sender_data_secret,
+    { leaf_index: 0U, generation: 0U, reuse_guard: b"\x28\x28\x28\x28", },
+    hs_key,
+    hs_nonce,
+    bad_commit_fc,
+    {
+      signature: bad_commit_sig,
+      confirmation_tag: Some(Bytes::make(32, b'\xEE')),
+    },
+    0,
+  )
+  let mut e_group_dup = false
+  try {
+    let _ = bob.process_message(bad_commit_msg)
+  } catch {
+    @group.GroupError::TreeError(@tree.TreeError::DuplicateKey) =>
+      e_group_dup = true
+    _ =>
+      fail("expected GroupError::TreeError(DuplicateKey) on malicious Commit")
+  }
+  assert_true(e_group_dup)
+  assert_eq(bob.epoch(), 1UL)
+  assert_eq(bob.epoch_authenticator(), bob_auth_before)
+  assert_eq(bob.tree_hash(), bob_th_before)
+  assert_true(bob.is_active())
+
+  // Genuine UpdatePath merges cleanly into rt, and live group advances & communicates normally
+  rt.merge_update_path_nodes(cs, 0U, genuine_up, gid, [])
+  let out2 = alice.commit_pending(rng)
+  assert_true(bob.process_message(out2.commit_msg) is Commit(0U, 2UL))
+  assert_eq(bob.epoch_authenticator(), alice.epoch_authenticator())
+  let ok_msg = alice.protect_application(
+    b"group-healthy-after-attack", b"", rng,
+  )
+  assert_true(
+    bob.process_message(ok_msg)
+    is Application(0U, b"group-healthy-after-attack", b""),
+  )
+}
+
+///|
+test "SEC-29: Malicious Commit with Remove(victim) and path=None (or invalid UpdatePath) rejected without deactivating victim" {
+  let cs = @cs.CipherSuite::X25519Aes128GcmSha256Ed25519
+  let gid = b"sec-29-gid"
+  let (alice, bob, alice_bundle, bob_bundle, welcome, rng) = setup_two_member_group(
+    cs, gid, b"sec-29-seed",
+  )
+  let verified = @group.verify_and_decrypt_welcome(
+    cs,
+    welcome,
+    bob_bundle.init_priv,
+    bob_bundle.key_package,
+    alice_bundle.key_package.leaf_node.signature_key,
+  )
+  let bob_auth_before = bob.epoch_authenticator()
+  let bob_th_before = bob.tree_hash()
+  // Construct a validly signed & encrypted Commit containing Remove(Bob=1U) with path = None
+  let malicious_commit : @types.Commit = {
+    proposals: [@types.ProposalOrRef::Proposal(@types.Proposal::Remove(1U))],
+    path: None,
+  }
+  let fc : @types.FramedContent = {
+    group_id: gid,
+    epoch: 1UL,
+    sender: @types.Sender::Member(0U),
+    authenticated_data: b"",
+    content: @types.FramedContentBody::Commit(malicious_commit),
+  }
+  let sig = @schedule.sign_framed_content(
+    cs,
+    alice_bundle.signature_priv,
+    @types.WireFormat::MlsPrivateMessage,
+    fc,
+    Some(verified.group_info.group_context),
+  )
+  // Compute realistic confirmation_tag for the path-less Commit (using zero commit_secret)
+  let post_rm_tree = @tree.RatchetTreeState::from_nodes(
+    alice.ratchet_tree_nodes(),
+  )
+  post_rm_tree.remove_leaf(1U)
+  let interim_ep1 = @schedule.compute_interim_transcript_hash(
+    cs,
+    verified.group_info.group_context.confirmed_transcript_hash,
+    verified.group_info.confirmation_tag,
+  )
+  let conf_th_ep2 = @schedule.compute_confirmed_transcript_hash(
+    cs,
+    interim_ep1,
+    {
+      wire_format: @types.WireFormat::MlsPrivateMessage,
+      content: fc,
+      signature: sig,
+    },
+  )
+  let forged_gc2 : @types.GroupContext = {
+    version: verified.group_info.group_context.version,
+    cipher_suite: verified.group_info.group_context.cipher_suite,
+    group_id: gid,
+    epoch: 2UL,
+    tree_hash: post_rm_tree.tree_hash(cs),
+    confirmed_transcript_hash: conf_th_ep2,
+    extensions: [],
+  }
+  let forged_secrets = @schedule.derive_epoch_secrets(
+    cs,
+    verified.secrets.init_secret,
+    cs.zero_secret(),
+    cs.zero_secret(),
+    forged_gc2.to_bytes(),
+  )
+  let forged_conf_tag = @schedule.compute_confirmation_tag(
+    cs,
+    forged_secrets.confirmation_key,
+    conf_th_ep2,
+  )
+  let st = @tree.SecretTree::new(cs, verified.secrets.encryption_secret, 2U)
+  let (hs_key, hs_nonce) = st.handshake_key_nonce_for_generation(0U, 0U)
+  let sd : @types.MlsSenderData = {
+    leaf_index: 0U,
+    generation: 0U,
+    reuse_guard: b"\x29\x01\x02\x03",
+  }
+  let forged_kick_msg = @schedule.encrypt_private_message_with_keys(
+    cs,
+    verified.secrets.sender_data_secret,
+    sd,
+    hs_key,
+    hs_nonce,
+    fc,
+    { signature: sig, confirmation_tag: Some(forged_conf_tag), },
+    0,
+  )
+  // Bob MUST reject the illegal path-less Remove Commit and remain active!
+  let mut got_invalid_commit = false
+  try {
+    let _ = bob.process_message(forged_kick_msg)
+  } catch {
+    @group.GroupError::InvalidCommit(_) => got_invalid_commit = true
+    _ => fail("expected GroupError::InvalidCommit on path-less Remove(Bob)")
+  }
+  assert_true(got_invalid_commit)
+  assert_true(bob.is_active())
+  assert_eq(bob.epoch(), 1UL)
+  assert_eq(bob.epoch_authenticator(), bob_auth_before)
+  assert_eq(bob.tree_hash(), bob_th_before)
+
+  // Also verify Remove(Bob) with an invalid UpdatePath (reusing Alice's old leaf key) is rejected
+  let bad_leaf = match post_rm_tree.get_leaf(0U) {
+    Some(l) => l
+    None => fail("expected Alice leaf 0")
+  }
+  let bad_up = sec_forge_signed_update_path(
+    cs,
+    post_rm_tree,
+    0U,
+    gid,
+    alice_bundle.signature_priv,
+    bad_leaf,
+    bad_leaf.encryption_key,
+    [],
+  )
+  let fc_bad_up : @types.FramedContent = {
+    group_id: gid,
+    epoch: 1UL,
+    sender: @types.Sender::Member(0U),
+    authenticated_data: b"",
+    content: @types.FramedContentBody::Commit({
+      proposals: [@types.ProposalOrRef::Proposal(@types.Proposal::Remove(1U))],
+      path: Some(bad_up),
+    }),
+  }
+  let sig_bad_up = @schedule.sign_framed_content(
+    cs,
+    alice_bundle.signature_priv,
+    @types.WireFormat::MlsPrivateMessage,
+    fc_bad_up,
+    Some(verified.group_info.group_context),
+  )
+  let forged_bad_up_msg = @schedule.encrypt_private_message_with_keys(
+    cs,
+    verified.secrets.sender_data_secret,
+    sd,
+    hs_key,
+    hs_nonce,
+    fc_bad_up,
+    { signature: sig_bad_up, confirmation_tag: Some(forged_conf_tag), },
+    0,
+  )
+  let mut got_bad_up_err = false
+  try {
+    let _ = bob.process_message(forged_bad_up_msg)
+  } catch {
+    @group.GroupError::TreeError(@tree.TreeError::DuplicateKey) =>
+      got_bad_up_err = true
+    _ => fail("expected TreeError(DuplicateKey) on Remove(Bob) with bad path")
+  }
+  assert_true(got_bad_up_err)
+  assert_true(bob.is_active())
+  assert_eq(bob.epoch(), 1UL)
+
+  // Bob continues receiving legitimate application and Commit messages cleanly (gen 0 ratchet unpolluted!)
+  let legit_app = alice.protect_application(b"bob-still-active", b"aad", rng)
+  assert_true(
+    bob.process_message(legit_app)
+    is Application(0U, b"bob-still-active", b"aad"),
+  )
+  let legit_commit = alice.commit_pending(rng)
+  assert_true(bob.process_message(legit_commit.commit_msg) is Commit(0U, 2UL))
+  assert_true(bob.is_active())
+  assert_eq(bob.epoch(), 2UL)
+  assert_eq(bob.epoch_authenticator(), alice.epoch_authenticator())
+}
+
+///|
+test "SEC-30: Concurrent and poisoned pending_proposals deterministically filtered by commit_pending without deadlock" {
+  let cs = @cs.CipherSuite::X25519ChaCha20Poly1305Sha256Ed25519
+  let (alice, bob, charlie, rng) = setup_three_member_group(
+    cs, b"sec-30-gid", b"sec-30-seed",
+  )
+  // Add Eve (leaf 3) -> epoch 3
+  let eve_bundle = @group.KeyPackageBundle::generate(cs, b"eve", rng)
+  let prop_add_eve = alice.propose_add(eve_bundle.key_package, rng)
+  let _ = bob.process_message(prop_add_eve)
+  let _ = charlie.process_message(prop_add_eve)
+  let out3 = alice.commit_pending(rng)
+  let _ = bob.process_message(out3.commit_msg)
+  let _ = charlie.process_message(out3.commit_msg)
+  let welcome_eve = match out3.welcome {
+    Some(w) => w
+    None => fail("expected Welcome for Eve")
+  }
+  let eve = @group.MlsGroup::from_welcome(cs, welcome_eve, eve_bundle, None)
+  assert_eq(eve.my_leaf_index(), 3U)
+  assert_eq(alice.epoch(), 3UL)
+  assert_eq(eve.epoch_authenticator(), alice.epoch_authenticator())
+
+  // Flood conflicting & poisoned proposals at epoch 3:
+  // 1. Alice and Charlie both concurrently propose_remove(Eve=3U)
+  let rm_eve_a = alice.propose_remove(3U, rng)
+  let rm_eve_c = charlie.propose_remove(3U, rng)
+  // 2. Eve maliciously proposes removing Alice (the committer!) and also sends Update for herself
+  let rm_alice_e = eve.propose_remove(0U, rng)
+  let upd_eve = eve.propose_update(rng)
+  // 3. Alice sends her own Update; Bob and Charlie each send multiple Updates
+  let upd_alice = alice.propose_update(rng)
+  let upd_charlie_1 = charlie.propose_update(rng)
+  let upd_charlie_2 = charlie.propose_update(rng)
+  let upd_bob_1 = bob.propose_update(rng)
+  let upd_bob_2 = bob.propose_update(rng)
+
+  // Deliver all proposals to every other member (Alice receives every conflicting proposal!)
+  for
+    msg in [
+      rm_eve_c, rm_alice_e, upd_eve, upd_charlie_1, upd_charlie_2, upd_bob_1, upd_bob_2,
+    ] {
+    let _ = alice.process_message(msg)
+  }
+  for
+    msg in [
+      rm_eve_a, rm_eve_c, rm_alice_e, upd_eve, upd_alice, upd_charlie_1, upd_charlie_2,
+    ] {
+    let _ = bob.process_message(msg)
+  }
+  for msg in [rm_eve_a, rm_alice_e, upd_eve, upd_alice, upd_bob_1, upd_bob_2] {
+    let _ = charlie.process_message(msg)
+  }
+  for
+    msg in [
+      rm_eve_a, rm_eve_c, upd_alice, upd_charlie_1, upd_charlie_2, upd_bob_1, upd_bob_2,
+    ] {
+    let _ = eve.process_message(msg)
+  }
+
+  // Alice calls commit_pending -> must deterministically filter conflicts & advance to epoch 4!
+  let out4 = alice.commit_pending(rng)
+  assert_eq(out4.new_epoch, 4UL)
+  assert_eq(alice.epoch(), 4UL)
+  assert_eq(alice.members().length(), 3)
+
+  // Bob and Charlie synchronize cleanly to epoch 4
+  assert_true(bob.process_message(out4.commit_msg) is Commit(0U, 4UL))
+  assert_true(charlie.process_message(out4.commit_msg) is Commit(0U, 4UL))
+  assert_eq(bob.epoch_authenticator(), alice.epoch_authenticator())
+  assert_eq(charlie.epoch_authenticator(), alice.epoch_authenticator())
+  assert_eq(bob.tree_hash(), alice.tree_hash())
+  assert_eq(charlie.tree_hash(), alice.tree_hash())
+
+  // Eve is cleanly evicted when processing the Commit
+  let mut eve_kicked = false
+  try {
+    let _ = eve.process_message(out4.commit_msg)
+  } catch {
+    @group.GroupError::MemberRemoved => eve_kicked = true
+    _ => fail("expected MemberRemoved for Eve")
+  }
+  assert_true(eve_kicked)
+  assert_false(eve.is_active())
+
+  // All surviving members communicate bidirectionally at epoch 4
+  let m_a = alice.protect_application(b"from-alice-ep4", b"", rng)
+  let m_b = bob.protect_application(b"from-bob-ep4", b"", rng)
+  let m_c = charlie.protect_application(b"from-charlie-ep4", b"", rng)
+  assert_true(
+    bob.process_message(m_a) is Application(0U, b"from-alice-ep4", b""),
+  )
+  assert_true(
+    charlie.process_message(m_a) is Application(0U, b"from-alice-ep4", b""),
+  )
+  assert_true(
+    alice.process_message(m_b) is Application(1U, b"from-bob-ep4", b""),
+  )
+  assert_true(
+    charlie.process_message(m_b) is Application(1U, b"from-bob-ep4", b""),
+  )
+  assert_true(
+    alice.process_message(m_c) is Application(2U, b"from-charlie-ep4", b""),
+  )
+  assert_true(
+    bob.process_message(m_c) is Application(2U, b"from-charlie-ep4", b""),
+  )
+}
+
+///|
+test "SEC-31: SecretTree O(1) atomic staging, non-empty root parent_hash, all-blank tree, and Welcome missing path_secret unmerged check" {
+  let cs = @cs.CipherSuite::X25519Aes128GcmSha256Ed25519
+  // Part A: SecretTree O(1) atomic stage_key_nonce / commit_stage anti-replay & zero state pollution
+  let st = @tree.SecretTree::new(cs, Bytes::make(32, b'\x5A'), 4U)
+  let s0_trial = st.stage_key_nonce(0U, 0U, true)
+  // Stage forward jump (gen 5) and discard without committing -> must NOT pollute live ratchet
+  let _ = st.stage_key_nonce(0U, 5U, true)
+  // Excessive forward jump rejected without mutating ratchet
+  let mut e_far = false
+  try {
+    let _ = st.stage_key_nonce(0U, 1001U, true)
+  } catch {
+    @tree.TreeError::GenerationTooFarAhead(1001U) => e_far = true
+    _ => fail("expected GenerationTooFarAhead(1001)")
+  }
+  assert_true(e_far)
+  // Gen 0 is still unconsumed and produces identical (key, nonce)
+  let s0_commit = st.stage_key_nonce(0U, 0U, true)
+  assert_eq(s0_commit.key(), s0_trial.key())
+  assert_eq(s0_commit.nonce(), s0_trial.nonce())
+  st.commit_stage(s0_commit)
+  // After commit_stage, gen 0 replay is immediately rejected
+  let mut e_replay_app = false
+  try {
+    let _ = st.stage_key_nonce(0U, 0U, true)
+  } catch {
+    @tree.TreeError::ReplayDetected(0U) => e_replay_app = true
+    _ => fail("expected ReplayDetected(0) after commit_stage")
+  }
+  assert_true(e_replay_app)
+  // Handshake ratchet staging & commit works independently
+  let hs0 = st.stage_key_nonce(0U, 0U, false)
+  st.commit_stage(hs0)
+  let mut e_replay_hs = false
+  try {
+    let _ = st.stage_key_nonce(0U, 0U, false)
+  } catch {
+    @tree.TreeError::ReplayDetected(0U) => e_replay_hs = true
+    _ => fail("expected ReplayDetected(0) on handshake ratchet")
+  }
+  assert_true(e_replay_hs)
+
+  // Part B: Non-blank root with non-empty parent_hash rejected even when child parent_hash matches it
+  let (alice, _bob, alice_bundle, bob_bundle, welcome, rng) = setup_two_member_group(
+    cs, b"sec-31-gid", b"sec-31-seed",
+  )
+  let base_nodes = alice.ratchet_tree_nodes()
+  let root_parent = match base_nodes[1] {
+    Some(@types.Node::Parent(p)) => p
+    _ => fail("expected non-blank root parent node 1")
+  }
+  let leaf0 = match base_nodes[0] {
+    Some(@types.Node::Leaf(l)) => l
+    _ => fail("expected Alice leaf 0")
+  }
+  let bad_root_nodes = base_nodes.copy()
+  bad_root_nodes[1] = Some(
+    @types.Node::Parent({
+      encryption_key: root_parent.encryption_key,
+      parent_hash: Bytes::make(32, b'\x99'),
+      unmerged_leaves: root_parent.unmerged_leaves,
+    }),
+  )
+  let bad_root_tree = @tree.RatchetTreeState::from_nodes(bad_root_nodes)
+  // Recompute leaf 0's parent_hash to match the forged non-empty root parent_hash
+  let forged_child_ph = bad_root_tree.compute_parent_hash(cs, 1U, 0U)
+  bad_root_tree.nodes[0] = Some(
+    @types.Node::Leaf({
+      encryption_key: leaf0.encryption_key,
+      signature_key: leaf0.signature_key,
+      credential: leaf0.credential,
+      capabilities: leaf0.capabilities,
+      leaf_node_source: leaf0.leaf_node_source,
+      lifetime: leaf0.lifetime,
+      parent_hash: Some(forged_child_ph),
+      extensions: leaf0.extensions,
+      signature: leaf0.signature,
+    }),
+  )
+  let mut e_root_ph = false
+  bad_root_tree.validate_parent_hashes(cs) catch {
+    @tree.TreeError::InvalidParentHash => e_root_ph = true
+    _ =>
+      fail(
+        "expected InvalidParentHash for non-blank root with non-empty parent_hash",
+      )
+  }
+  assert_true(e_root_ph)
+
+  // Part C: Empty / all-blank RatchetTree rejected with EmptyTree
+  let mut e_zero = false
+  try {
+    let _ = @tree.RatchetTreeState::from_nodes([])
+  } catch {
+    @tree.TreeError::EmptyTree => e_zero = true
+    _ => fail("expected EmptyTree for 0-length nodes")
+  }
+  assert_true(e_zero)
+  for blank_nodes in [[None], [None, None, None]] {
+    let blank_tree = @tree.RatchetTreeState::from_nodes(blank_nodes)
+    let mut e_blank = false
+    blank_tree.validate_tree_structure() catch {
+      @tree.TreeError::EmptyTree => e_blank = true
+      _ => fail("expected EmptyTree for all-blank RatchetTree")
+    }
+    assert_true(e_blank)
+  }
+
+  // Part D: Welcome with path_secret = None rejected when joiner is NOT in ancestor unmerged_leaves
+  let verified = @group.verify_and_decrypt_welcome(
+    cs,
+    welcome,
+    bob_bundle.init_priv,
+    bob_bundle.key_package,
+    alice_bundle.key_package.leaf_node.signature_key,
+  )
+  // Root node 1 is non-blank with unmerged_leaves = [], so stripping path_secret violates RFC 9420 §12.4.3.1
+  let stripped_gs : @types.GroupSecrets = {
+    joiner_secret: verified.group_secrets.joiner_secret,
+    path_secret: None,
+    psks: verified.group_secrets.psks,
+  }
+  let forged_welcome = repackage_welcome(
+    cs,
+    verified.group_info,
+    stripped_gs,
+    bob_bundle.key_package,
+    rng,
+  )
+  let mut e_unmerged = false
+  try {
+    let _ = @group.MlsGroup::from_welcome(cs, forged_welcome, bob_bundle, None)
+  } catch {
+    @group.GroupError::TreeError(@tree.TreeError::InvalidUnmergedLeaf) =>
+      e_unmerged = true
+    _ =>
+      fail(
+        "expected GroupError::TreeError(InvalidUnmergedLeaf) on Welcome missing path_secret",
+      )
+  }
+  assert_true(e_unmerged)
+}
+
+///|
+test "SEC-32: KeyPackage invalid Capabilities / duplicate extensions / low-order init_key and schedule context/sender mismatch rejected" {
+  let cs = @cs.CipherSuite::X25519Aes128GcmSha256Ed25519
+  let rng = @crypto.DeterministicRng::from_seed(b"sec-32-seed")
+  let alice = @group.MlsGroup::create(cs, b"sec-32-gid", b"alice", rng)
+  let base_b = @group.KeyPackageBundle::generate(cs, b"bob", rng)
+  let base_kp = base_b.key_package
+  let base_caps = base_kp.leaf_node.capabilities
+
+  // 1. Capabilities missing mls10 protocol version (validly re-signed!)
+  let kp_no_mls10 = sec_resign_key_package(
+    cs,
+    base_kp,
+    base_b.signature_priv,
+    base_kp.init_key,
+    base_kp.leaf_node.encryption_key,
+    {
+      versions: [2U],
+      cipher_suites: base_caps.cipher_suites,
+      extensions: base_caps.extensions,
+      proposals: base_caps.proposals,
+      credentials: base_caps.credentials,
+    },
+    [],
+    [],
+  )
+  // 2. Capabilities missing current cipher_suite CS1 (validly re-signed!)
+  let kp_no_cs = sec_resign_key_package(
+    cs,
+    base_kp,
+    base_b.signature_priv,
+    base_kp.init_key,
+    base_kp.leaf_node.encryption_key,
+    {
+      versions: base_caps.versions,
+      cipher_suites: [
+        @types.CIPHER_SUITE_MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_ED25519,
+      ],
+      extensions: base_caps.extensions,
+      proposals: base_caps.proposals,
+      credentials: base_caps.credentials,
+    },
+    [],
+    [],
+  )
+  // 3. Capabilities missing leaf credential type (validly re-signed!)
+  let kp_no_cred = sec_resign_key_package(
+    cs,
+    base_kp,
+    base_b.signature_priv,
+    base_kp.init_key,
+    base_kp.leaf_node.encryption_key,
+    {
+      versions: base_caps.versions,
+      cipher_suites: base_caps.cipher_suites,
+      extensions: base_caps.extensions,
+      proposals: base_caps.proposals,
+      credentials: [@types.CREDENTIAL_TYPE_X509],
+    },
+    [],
+    [],
+  )
+  // 4. Duplicate extension_type in KeyPackage.extensions (validly re-signed!)
+  let dup_exts : Array[@types.Extension] = [
+    { extension_type: @types.EXT_APPLICATION_ID, extension_data: b"id-1", },
+    { extension_type: @types.EXT_APPLICATION_ID, extension_data: b"id-2", },
+  ]
+  let kp_dup_kp_ext = sec_resign_key_package(
+    cs,
+    base_kp,
+    base_b.signature_priv,
+    base_kp.init_key,
+    base_kp.leaf_node.encryption_key,
+    base_caps,
+    [],
+    dup_exts,
+  )
+  // 5. Duplicate extension_type in LeafNode.extensions (validly re-signed!)
+  let kp_dup_leaf_ext = sec_resign_key_package(
+    cs,
+    base_kp,
+    base_b.signature_priv,
+    base_kp.init_key,
+    base_kp.leaf_node.encryption_key,
+    base_caps,
+    dup_exts,
+    [],
+  )
+  // 6. Low-order init_key (all-zero & order-8 X25519 point) and low-order leaf encryption_key (validly re-signed!)
+  let low_zero = Bytes::make(32, b'\x00')
+  let low_order8 = @tls.bytes_from_hex(
+    "e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800",
+  )
+  let kp_low_init_zero = sec_resign_key_package(
+    cs,
+    base_kp,
+    base_b.signature_priv,
+    low_zero,
+    base_kp.leaf_node.encryption_key,
+    base_caps,
+    [],
+    [],
+  )
+  let kp_low_init_ord8 = sec_resign_key_package(
+    cs,
+    base_kp,
+    base_b.signature_priv,
+    low_order8,
+    base_kp.leaf_node.encryption_key,
+    base_caps,
+    [],
+    [],
+  )
+  let kp_low_leaf_enc = sec_resign_key_package(
+    cs,
+    base_kp,
+    base_b.signature_priv,
+    base_kp.init_key,
+    low_zero,
+    base_caps,
+    [],
+    [],
+  )
+  for
+    bad_kp in [
+      kp_no_mls10, kp_no_cs, kp_no_cred, kp_dup_kp_ext, kp_dup_leaf_ext, kp_low_init_zero,
+      kp_low_init_ord8, kp_low_leaf_enc,
+    ] {
+    let mut v_err = false
+    @group.verify_key_package(cs, bad_kp) catch {
+      @group.GroupError::InvalidKeyPackage(_) => v_err = true
+      _ => fail("expected InvalidKeyPackage from verify_key_package")
+    }
+    assert_true(v_err)
+    let mut p_err = false
+    try {
+      let _ = alice.propose_add(bad_kp, rng)
+    } catch {
+      @group.GroupError::InvalidKeyPackage(_) => p_err = true
+      _ => fail("expected InvalidKeyPackage from propose_add")
+    }
+    assert_true(p_err)
+  }
+
+  // 7. schedule public API checks: sender != leaf_index and cross-group group_id / epoch mismatch
+  let (sig_priv, sig_pub) = cs.signature_keypair_from_seed(rng.next_bytes(32))
+  let sd_secret = rng.next_bytes(32)
+  let membership_key = rng.next_bytes(32)
+  let content_key = rng.next_bytes(16)
+  let content_nonce = rng.next_bytes(12)
+  let gc : @types.GroupContext = {
+    version: @types.PROTOCOL_VERSION_MLS10,
+    cipher_suite: cs.id(),
+    group_id: b"sec-32-group-a",
+    epoch: 7UL,
+    tree_hash: Bytes::make(32, b'\x12'),
+    confirmed_transcript_hash: Bytes::make(32, b'\x34'),
+    extensions: [],
+  }
+  let gc_wrong_gid : @types.GroupContext = {
+    version: gc.version,
+    cipher_suite: gc.cipher_suite,
+    group_id: b"sec-32-group-b",
+    epoch: gc.epoch,
+    tree_hash: gc.tree_hash,
+    confirmed_transcript_hash: gc.confirmed_transcript_hash,
+    extensions: gc.extensions,
+  }
+  let gc_wrong_epoch : @types.GroupContext = {
+    version: gc.version,
+    cipher_suite: gc.cipher_suite,
+    group_id: gc.group_id,
+    epoch: 8UL,
+    tree_hash: gc.tree_hash,
+    confirmed_transcript_hash: gc.confirmed_transcript_hash,
+    extensions: gc.extensions,
+  }
+  let app_fc : @types.FramedContent = {
+    group_id: gc.group_id,
+    epoch: gc.epoch,
+    sender: @types.Sender::Member(0U),
+    authenticated_data: b"aad",
+    content: @types.FramedContentBody::Application(b"payload"),
+  }
+  let app_sig = @schedule.sign_framed_content(
+    cs,
+    sig_priv,
+    @types.WireFormat::MlsPrivateMessage,
+    app_fc,
+    Some(gc),
+  )
+  let app_auth : @types.FramedContentAuthData = {
+    signature: app_sig,
+    confirmation_tag: None,
+  }
+  // 7a. encrypt_private_message_with_keys rejects sender (0U) != sender_data.leaf_index (1U)
+  let mut e_sender = false
+  try {
+    let _ = @schedule.encrypt_private_message_with_keys(
+      cs,
+      sd_secret,
+      { leaf_index: 1U, generation: 0U, reuse_guard: b"\xAA\xBB\xCC\xDD", },
+      content_key,
+      content_nonce,
+      app_fc,
+      app_auth,
+      0,
+    )
+  } catch {
+    @schedule.ScheduleError::SenderMismatch => e_sender = true
+    _ => fail("expected ScheduleError::SenderMismatch")
+  }
+  assert_true(e_sender)
+
+  // 7b. decrypt_private_message_with_keys rejects group_id / epoch mismatch against GroupContext
+  let good_sd : @types.MlsSenderData = {
+    leaf_index: 0U,
+    generation: 0U,
+    reuse_guard: b"\xAA\xBB\xCC\xDD",
+  }
+  let pm = @schedule.encrypt_private_message_with_keys(
+    cs, sd_secret, good_sd, content_key, content_nonce, app_fc, app_auth, 0,
+  )
+  let _ = @schedule.decrypt_private_message_with_keys(
+    cs, sig_pub, gc, good_sd, content_key, content_nonce, pm,
+  )
+  for bad_gc in [gc_wrong_gid, gc_wrong_epoch] {
+    let mut e_priv_ctx = false
+    try {
+      let _ = @schedule.decrypt_private_message_with_keys(
+        cs, sig_pub, bad_gc, good_sd, content_key, content_nonce, pm,
+      )
+    } catch {
+      @schedule.ScheduleError::GroupContextMismatch => e_priv_ctx = true
+      _ =>
+        fail(
+          "expected ScheduleError::GroupContextMismatch in decrypt_private_message_with_keys",
+        )
+    }
+    assert_true(e_priv_ctx)
+  }
+
+  // 7c. unprotect_public_message rejects group_id / epoch mismatch against GroupContext
+  let prop_fc : @types.FramedContent = {
+    group_id: gc.group_id,
+    epoch: gc.epoch,
+    sender: @types.Sender::Member(0U),
+    authenticated_data: b"",
+    content: @types.FramedContentBody::Proposal(@types.Proposal::Remove(1U)),
+  }
+  let pub_msg = @schedule.protect_public_message(
+    cs,
+    sig_priv,
+    Some(membership_key),
+    prop_fc,
+    Some(gc),
+    None,
+  )
+  let _ = @schedule.unprotect_public_message(
+    cs,
+    sig_pub,
+    Some(membership_key),
+    pub_msg,
+    Some(gc),
+  )
+  for bad_gc in [gc_wrong_gid, gc_wrong_epoch] {
+    let mut e_pub_ctx = false
+    try {
+      let _ = @schedule.unprotect_public_message(
+        cs,
+        sig_pub,
+        Some(membership_key),
+        pub_msg,
+        Some(bad_gc),
+      )
+    } catch {
+      @schedule.ScheduleError::GroupContextMismatch => e_pub_ctx = true
+      _ =>
+        fail(
+          "expected ScheduleError::GroupContextMismatch in unprotect_public_message",
+        )
+    }
+    assert_true(e_pub_ctx)
+  }
+}
