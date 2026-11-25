@@ -152,6 +152,13 @@ pub fn unprotect_public_message(
     Proposal | Commit => ()
   }
   validate_confirmation_tag_presence(content_type, msg.auth.confirmation_tag)
+  match group_context {
+    Some(ctx) =>
+      if msg.content.group_id != ctx.group_id || msg.content.epoch != ctx.epoch {
+        raise GroupContextMismatch
+      }
+    None => ()
+  }
   let tbs = build_framed_content_tbs(
     @types.WireFormat::MlsPublicMessage,
     msg.content,
@@ -249,7 +256,10 @@ pub fn encrypt_private_message_with_keys(
   padding_len : Int32,
 ) -> @types.PrivateMessage raise ScheduleError {
   match content.sender {
-    Member(_) => ()
+    Member(leaf_index) =>
+      if leaf_index != sender_data.leaf_index {
+        raise SenderMismatch
+      }
     External(_) | NewMemberProposal | NewMemberCommit => raise InvalidWireFormat
   }
   let content_type = content.content.content_type()
@@ -347,6 +357,9 @@ pub fn decrypt_private_message_with_keys(
   content_nonce : Bytes,
   msg : @types.PrivateMessage,
 ) -> @types.AuthenticatedContent raise ScheduleError {
+  if msg.group_id != group_context.group_id || msg.epoch != group_context.epoch {
+    raise GroupContextMismatch
+  }
   let xored_nonce = apply_reuse_guard(
     cs,
     content_nonce,

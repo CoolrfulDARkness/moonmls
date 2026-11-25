@@ -217,25 +217,26 @@ fn sc_is_canonical(s : Bytes) -> Bool {
 }
 
 ///|
+fn u64_sub_borrow(x : UInt64, y : UInt64) -> (UInt64, UInt64) {
+  let d = x - y
+  let b = ((x.lnot() & y) | ((x.lnot() | y) & d)) >> 63
+  (d, b)
+}
+
+///|
 fn sc_sub_l_if_ge(
   r0 : UInt64,
   r1 : UInt64,
   r2 : UInt64,
   r3 : UInt64,
 ) -> (UInt64, UInt64, UInt64, UInt64) {
-  let d0 = r0 - sc_l0
-  let b0 = if r0 < sc_l0 { 1UL } else { 0UL }
-  let d1_tmp = r1 - sc_l1
-  let b1a = if r1 < sc_l1 { 1UL } else { 0UL }
-  let d1 = d1_tmp - b0
-  let b1b = if d1_tmp < b0 { 1UL } else { 0UL }
+  let (d0, b0) = u64_sub_borrow(r0, sc_l0)
+  let (d1_tmp, b1a) = u64_sub_borrow(r1, sc_l1)
+  let (d1, b1b) = u64_sub_borrow(d1_tmp, b0)
   let b1 = b1a | b1b
-  let d2 = r2 - b1
-  let b2 = if r2 < b1 { 1UL } else { 0UL }
-  let d3_tmp = r3 - sc_l3
-  let b3a = if r3 < sc_l3 { 1UL } else { 0UL }
-  let d3 = d3_tmp - b2
-  let b3b = if d3_tmp < b2 { 1UL } else { 0UL }
+  let (d2, b2) = u64_sub_borrow(r2, b1)
+  let (d3_tmp, b3a) = u64_sub_borrow(r3, sc_l3)
+  let (d3, b3b) = u64_sub_borrow(d3_tmp, b2)
   let borrow = b3a | b3b
   // If borrow == 1 then r < L, keep r; else keep d
   let mask = 0UL - borrow
@@ -300,12 +301,10 @@ fn sc_muladd(a : Bytes, b : Bytes, c : Bytes) -> Bytes {
       prod[i + j] = sum & 0xffffffffUL
       carry = sum >> 32
     }
-    let mut k = i + 8
-    while carry != 0UL {
+    for k = i + 8; k < 17; k = k + 1 {
       let sum = prod[k] + carry
       prod[k] = sum & 0xffffffffUL
       carry = sum >> 32
-      k = k + 1
     }
   }
   let buf = FixedArray::make(68, b'\x00')
@@ -386,6 +385,10 @@ pub fn ed25519_verify(
   let a_pt = match ed_frombytes(public_key) {
     Some(p) => p
     None => return false
+  }
+  let a8 = ed_double(ed_double(ed_double(a_pt)))
+  if ed_point_equal(a8, ed_identity()) {
+    return false
   }
   let r_pt = match ed_frombytes(r_bytes) {
     Some(p) => p

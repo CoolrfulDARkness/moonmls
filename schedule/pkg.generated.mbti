@@ -67,6 +67,8 @@ pub(all) suberror ScheduleError {
   DecryptionFailed
   InvalidWireFormat
   UnexpectedContentType
+  GroupContextMismatch
+  SenderMismatch
 }
 pub impl Show for ScheduleError
 

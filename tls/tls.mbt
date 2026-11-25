@@ -395,10 +395,23 @@ pub fn bytes_from_hex(hex : String) -> Bytes raise TlsError {
 
 ///|
 fn nibble_to_hex_char(n : Int32) -> Char {
-  if n < 10 {
-    (0x30 + n).unsafe_to_char()
-  } else {
-    (0x61 + n - 10).unsafe_to_char()
+  match n & 0x0F {
+    0 => '0'
+    1 => '1'
+    2 => '2'
+    3 => '3'
+    4 => '4'
+    5 => '5'
+    6 => '6'
+    7 => '7'
+    8 => '8'
+    9 => '9'
+    10 => 'a'
+    11 => 'b'
+    12 => 'c'
+    13 => 'd'
+    14 => 'e'
+    _ => 'f'
   }
 }
 

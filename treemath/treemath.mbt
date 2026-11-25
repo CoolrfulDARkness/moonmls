@@ -34,9 +34,17 @@ pub fn is_leaf(x : UInt32) -> Bool {
 }
 
 ///|
+const MAX_LEAVES : UInt32 = 0x40000000U
+
+///|
 /// Converts a 0-based leaf index to its node index (`2 * leaf_index`).
+/// Saturates to `0xFFFFFFFEU` if `leaf_index >= MAX_LEAVES` to prevent overflow.
 pub fn leaf_to_node(leaf_index : UInt32) -> UInt32 {
-  leaf_index << 1
+  if leaf_index >= MAX_LEAVES {
+    0xFFFFFFFEU
+  } else {
+    leaf_index << 1
+  }
 }
 
 ///|
@@ -53,8 +61,9 @@ pub fn node_to_leaf(node_index : UInt32) -> UInt32? {
 ///|
 /// Returns the number of nodes needed to represent a tree with `n_leaves`
 /// leaves (RFC 9420 Appendix C `node_width`).
+/// Returns `0U` if `n_leaves == 0U` or `n_leaves > MAX_LEAVES`.
 pub fn node_width(n_leaves : UInt32) -> UInt32 {
-  if n_leaves == 0U {
+  if n_leaves == 0U || n_leaves > MAX_LEAVES {
     0U
   } else {
     2U * (n_leaves - 1U) + 1U
@@ -104,26 +113,44 @@ pub fn right(x : UInt32) -> UInt32? {
 }
 
 ///|
-fn parent_step(x : UInt32) -> UInt32 {
+fn parent_step(x : UInt32) -> UInt32? {
   let k = level(x)
+  if k >= 31U {
+    return None
+  }
   let b = (x >> (k + 1U).reinterpret_as_int()) & 1U
-  (x | (1U << k.reinterpret_as_int())) ^ (b << (k + 1U).reinterpret_as_int())
+  Some(
+    (x | (1U << k.reinterpret_as_int())) ^ (b << (k + 1U).reinterpret_as_int()),
+  )
 }
 
 ///|
 /// Returns the immediate parent of node `x` in a tree with `n_leaves` leaves,
 /// or `None` if `x` is the root (or out of bounds).
 pub fn parent(x : UInt32, n_leaves : UInt32) -> UInt32? {
-  if n_leaves == 0U {
+  if n_leaves == 0U || n_leaves > MAX_LEAVES {
     return None
   }
   let w = node_width(n_leaves)
   if x >= w || x == root(n_leaves) {
     return None
   }
-  let mut p = parent_step(x)
+  let mut p = match parent_step(x) {
+    Some(next) => next
+    None => return None
+  }
+  let mut steps = 0U
   while p >= w {
-    p = parent_step(p)
+    if steps >= 32U {
+      return None
+    }
+    match parent_step(p) {
+      Some(next) => {
+        p = next
+        steps += 1U
+      }
+      None => return None
+    }
   }
   Some(p)
 }
@@ -132,6 +159,9 @@ pub fn parent(x : UInt32, n_leaves : UInt32) -> UInt32? {
 /// Returns the sibling of node `x` in a tree with `n_leaves` leaves, or `None`
 /// if `x` is the root (or out of bounds).
 pub fn sibling(x : UInt32, n_leaves : UInt32) -> UInt32? {
+  if n_leaves == 0U || n_leaves > MAX_LEAVES {
+    return None
+  }
   match parent(x, n_leaves) {
     None => None
     Some(p) =>
@@ -141,9 +171,16 @@ pub fn sibling(x : UInt32, n_leaves : UInt32) -> UInt32? {
           None => None
           Some(r0) => {
             let mut r = r0
+            let mut steps = 0U
             while r >= w {
+              if steps >= 32U {
+                return None
+              }
               match left(r) {
-                Some(l) => r = l
+                Some(l) => {
+                  r = l
+                  steps += 1U
+                }
                 None => return None
               }
             }
@@ -161,12 +198,20 @@ pub fn sibling(x : UInt32, n_leaves : UInt32) -> UInt32? {
 /// `root(n_leaves)`). Returns an empty array for the root or out-of-bounds nodes.
 pub fn direct_path(x : UInt32, n_leaves : UInt32) -> Array[UInt32] {
   let path : Array[UInt32] = []
+  if n_leaves == 0U || n_leaves > MAX_LEAVES {
+    return path
+  }
   let mut cur = x
-  while true {
+  let mut steps = 0U
+  while steps < 32U {
     match parent(cur, n_leaves) {
       Some(p) => {
+        if p == cur {
+          break
+        }
         path.push(p)
         cur = p
+        steps += 1U
       }
       None => break
     }
@@ -179,15 +224,23 @@ pub fn direct_path(x : UInt32, n_leaves : UInt32) -> Array[UInt32] {
 /// `x` up to (but not including) the root.
 pub fn copath(x : UInt32, n_leaves : UInt32) -> Array[UInt32] {
   let out : Array[UInt32] = []
+  if n_leaves == 0U || n_leaves > MAX_LEAVES {
+    return out
+  }
   let mut cur = x
-  while true {
+  let mut steps = 0U
+  while steps < 32U {
     match parent(cur, n_leaves) {
       Some(p) => {
+        if p == cur {
+          break
+        }
         match sibling(cur, n_leaves) {
           Some(s) => out.push(s)
           None => ()
         }
         cur = p
+        steps += 1U
       }
       None => break
     }
@@ -201,6 +254,15 @@ fn safe_shr(v : UInt32, shift : UInt32) -> UInt32 {
     0U
   } else {
     v >> shift.reinterpret_as_int()
+  }
+}
+
+///|
+fn safe_shl(v : UInt32, shift : UInt32) -> UInt32 {
+  if shift >= 32U {
+    0U
+  } else {
+    v << shift.reinterpret_as_int()
   }
 }
 
@@ -224,7 +286,7 @@ pub fn common_ancestor(x : UInt32, y : UInt32) -> UInt32 {
     yn = yn >> 1
     k += 1U
   }
-  (xn << k.reinterpret_as_int()) + (1U << (k - 1U).reinterpret_as_int()) - 1U
+  safe_shl(xn, k) + (1U << (k - 1U).reinterpret_as_int()) - 1U
 }
 
 ///|
@@ -232,6 +294,9 @@ pub fn common_ancestor(x : UInt32, y : UInt32) -> UInt32 {
 /// the subtree rooted at node `x`.
 pub fn subtree_range(x : UInt32) -> (UInt32, UInt32) {
   let k = level(x)
+  if k >= 32U {
+    return (0U, 0xFFFFFFFFU)
+  }
   let min_leaf = safe_shr(x, k + 1U) << k.reinterpret_as_int()
   let max_leaf = min_leaf + (1U << k.reinterpret_as_int()) - 1U
   (min_leaf, max_leaf)

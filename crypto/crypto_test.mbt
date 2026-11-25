@@ -441,6 +441,50 @@ test "ed25519 RFC 8032 section 7.1 vectors and malleability rejection" {
 }
 
 ///|
+test "ed25519 rejects identity and small-order torsion public keys" {
+  // Identity point O = (0, 1): compressed [0x01, 0x00, ..., 0x00]
+  let identity_pt = from_hex(
+    "0100000000000000000000000000000000000000000000000000000000000000",
+  )
+  // Forged signature with R = O, S = 0 (satisfies [S]B == R + [k]O without torsion check)
+  let forged_sig_o = from_hex(
+    "01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+  )
+  assert_false(@crypto.ed25519_verify(identity_pt, b"", forged_sig_o))
+  assert_false(
+    @crypto.ed25519_verify(identity_pt, b"arbitrary message", forged_sig_o),
+  )
+  let id_err : Result[Unit, @crypto.CryptoError] = Ok(
+    @crypto.ed25519_verify_or_raise(identity_pt, b"", forged_sig_o),
+  ) catch {
+    e => Err(e)
+  }
+  assert_true(id_err is Err(@crypto.InvalidSignature))
+
+  // All remaining canonical 8-torsion points (order 2, 4, and 8)
+  let small_order_pks : Array[Bytes] = [
+    // Order 2: (0, -1)
+    from_hex("ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"),
+    // Order 4: (+sqrt(-1), 0) and (-sqrt(-1), 0)
+    from_hex("0000000000000000000000000000000000000000000000000000000000000000"),
+    from_hex("0000000000000000000000000000000000000000000000000000000000000080"),
+    // Order 8: four points of exact order 8
+    from_hex("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a"),
+    from_hex("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa"),
+    from_hex("26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05"),
+    from_hex("26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85"),
+  ]
+  for pk_idx = 0; pk_idx < small_order_pks.length(); pk_idx = pk_idx + 1 {
+    let pk = small_order_pks[pk_idx]
+    // Test across 32 messages so k mod 8 == 0 cases are guaranteed to occur
+    for m = 0; m < 32; m = m + 1 {
+      let msg = Bytes::make(1, m.to_byte())
+      assert_false(@crypto.ed25519_verify(pk, msg, forged_sig_o))
+    }
+  }
+}
+
+///|
 test "DeterministicRng reproducibility, independence, and non-repetition" {
   let r1 = @crypto.DeterministicRng::from_seed(b"moonmls-seed-1")
   let r2 = @crypto.DeterministicRng::from_seed(b"moonmls-seed-1")

@@ -74,6 +74,11 @@ test "ScheduleError Show formatting" {
     "UnexpectedContentType",
   )
   assert_eq(
+    Show::to_string(@schedule.GroupContextMismatch),
+    "GroupContextMismatch",
+  )
+  assert_eq(Show::to_string(@schedule.SenderMismatch), "SenderMismatch")
+  assert_eq(
     Show::to_string(@schedule.TlsError(@tls.UnexpectedEof)),
     "TlsError(UnexpectedEof)",
   )
@@ -661,5 +666,198 @@ test "PrivateMessage encryption/decryption roundtrip and tamper rejection" {
     } noraise {
       _ => fail("expected non-zero padding to be rejected")
     }
+  }
+}
+
+///|
+test "Protection context consistency: group_id, epoch, and sender mismatch rejection" {
+  for
+    cs in [
+      @cs.X25519Aes128GcmSha256Ed25519,
+      @cs.X25519ChaCha20Poly1305Sha256Ed25519,
+    ] {
+    let (sign_priv, sign_pub) = cs.signature_keypair_from_seed(
+      Bytes::make(32, b'\x51'),
+    )
+    let gc = sample_group_context(cs)
+    let wrong_gid_gc : @types.GroupContext = {
+      version: gc.version,
+      cipher_suite: gc.cipher_suite,
+      group_id: flip_byte(gc.group_id, 0),
+      epoch: gc.epoch,
+      tree_hash: gc.tree_hash,
+      confirmed_transcript_hash: gc.confirmed_transcript_hash,
+      extensions: gc.extensions,
+    }
+    let wrong_epoch_gc : @types.GroupContext = {
+      version: gc.version,
+      cipher_suite: gc.cipher_suite,
+      group_id: gc.group_id,
+      epoch: gc.epoch + 1UL,
+      tree_hash: gc.tree_hash,
+      confirmed_transcript_hash: gc.confirmed_transcript_hash,
+      extensions: gc.extensions,
+    }
+    let mk = Bytes::make(32, b'\x88')
+
+    // 1. unprotect_public_message rejects group_id / epoch mismatch when Some(ctx)
+    let prop_content : @types.FramedContent = {
+      group_id: gc.group_id,
+      epoch: gc.epoch,
+      sender: @types.Sender::Member(1U),
+      authenticated_data: b"meta",
+      content: @types.FramedContentBody::Proposal(@types.Proposal::Remove(3U)),
+    }
+    let pub_prop = @schedule.protect_public_message(
+      cs,
+      sign_priv,
+      Some(mk),
+      prop_content,
+      Some(gc),
+      None,
+    )
+    assert_schedule_err(
+      () => {
+        @schedule.unprotect_public_message(
+          cs,
+          sign_pub,
+          Some(mk),
+          pub_prop,
+          Some(wrong_gid_gc),
+        )
+      },
+      @schedule.GroupContextMismatch,
+    )
+    assert_schedule_err(
+      () => {
+        @schedule.unprotect_public_message(
+          cs,
+          sign_pub,
+          Some(mk),
+          pub_prop,
+          Some(wrong_epoch_gc),
+        )
+      },
+      @schedule.GroupContextMismatch,
+    )
+
+    // External PublicMessage also rejects group_id/epoch mismatch if Some(ctx) is given
+    let ext_prop : @types.FramedContent = {
+      group_id: gc.group_id,
+      epoch: gc.epoch,
+      sender: @types.Sender::External(0U),
+      authenticated_data: b"",
+      content: @types.FramedContentBody::Proposal(@types.Proposal::Remove(2U)),
+    }
+    let pub_ext = @schedule.protect_public_message(
+      cs,
+      sign_priv,
+      None,
+      ext_prop,
+      None,
+      None,
+    )
+    assert_schedule_err(
+      () => {
+        @schedule.unprotect_public_message(
+          cs,
+          sign_pub,
+          None,
+          pub_ext,
+          Some(wrong_gid_gc),
+        )
+      },
+      @schedule.GroupContextMismatch,
+    )
+    assert_schedule_err(
+      () => {
+        @schedule.unprotect_public_message(
+          cs,
+          sign_pub,
+          None,
+          pub_ext,
+          Some(wrong_epoch_gc),
+        )
+      },
+      @schedule.GroupContextMismatch,
+    )
+
+    // 2. encrypt_private_message_with_keys rejects sender != Member(sender_data.leaf_index)
+    let sender_data_secret = Bytes::make(32, b'\x5a')
+    let content_key = Bytes::make(cs.aead_key_len(), b'\x6b')
+    let content_nonce = Bytes::make(cs.aead_nonce_len(), b'\x7c')
+    let sender_data : @types.MlsSenderData = {
+      leaf_index: 2U,
+      generation: 1U,
+      reuse_guard: b"\x11\x22\x33\x44",
+    }
+    let mismatched_sender_content : @types.FramedContent = {
+      group_id: gc.group_id,
+      epoch: gc.epoch,
+      sender: @types.Sender::Member(9U),
+      authenticated_data: b"",
+      content: @types.FramedContentBody::Application(b"hello"),
+    }
+    let sig_bad_sender = @schedule.sign_framed_content(
+      cs,
+      sign_priv,
+      @types.WireFormat::MlsPrivateMessage,
+      mismatched_sender_content,
+      Some(gc),
+    )
+    let auth_bad_sender : @types.FramedContentAuthData = {
+      signature: sig_bad_sender,
+      confirmation_tag: None,
+    }
+    assert_schedule_err(
+      () => {
+        @schedule.encrypt_private_message_with_keys(
+          cs, sender_data_secret, sender_data, content_key, content_nonce, mismatched_sender_content,
+          auth_bad_sender, 0,
+        )
+      },
+      @schedule.SenderMismatch,
+    )
+
+    // 3. decrypt_private_message_with_keys rejects group_id / epoch mismatch
+    let app_content : @types.FramedContent = {
+      group_id: gc.group_id,
+      epoch: gc.epoch,
+      sender: @types.Sender::Member(2U),
+      authenticated_data: b"aad",
+      content: @types.FramedContentBody::Application(b"secret"),
+    }
+    let sig = @schedule.sign_framed_content(
+      cs,
+      sign_priv,
+      @types.WireFormat::MlsPrivateMessage,
+      app_content,
+      Some(gc),
+    )
+    let auth : @types.FramedContentAuthData = {
+      signature: sig,
+      confirmation_tag: None,
+    }
+    let priv_msg = @schedule.encrypt_private_message_with_keys(
+      cs, sender_data_secret, sender_data, content_key, content_nonce, app_content,
+      auth, 0,
+    )
+    assert_schedule_err(
+      () => {
+        @schedule.decrypt_private_message_with_keys(
+          cs, sign_pub, wrong_gid_gc, sender_data, content_key, content_nonce, priv_msg,
+        )
+      },
+      @schedule.GroupContextMismatch,
+    )
+    assert_schedule_err(
+      () => {
+        @schedule.decrypt_private_message_with_keys(
+          cs, sign_pub, wrong_epoch_gc, sender_data, content_key, content_nonce,
+          priv_msg,
+        )
+      },
+      @schedule.GroupContextMismatch,
+    )
   }
 }

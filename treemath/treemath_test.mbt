@@ -814,3 +814,51 @@ test "zero and out-of-bounds guards" {
   assert_eq(@treemath.direct_path(7U, 4U), [])
   assert_eq(@treemath.copath(7U, 4U), [])
 }
+
+///|
+test "extreme UInt32 indices and MAX_LEAVES overflow/infinite-loop guards" {
+  // Valid boundary: n_leaves = 0x40000000U (2^30)
+  let max_leaves = 0x40000000U
+  assert_eq(@treemath.node_width(max_leaves), 0x7FFFFFFFU)
+  assert_eq(@treemath.root(max_leaves), 0x3FFFFFFFU)
+  assert_eq(@treemath.leaf_to_node(max_leaves - 1U), 0x7FFFFFFEU)
+  assert_eq(@treemath.parent(0x3FFFFFFFU, max_leaves), None)
+  let dp_max = @treemath.direct_path(0U, max_leaves)
+  assert_eq(dp_max.length(), 30)
+  assert_eq(dp_max[dp_max.length() - 1], 0x3FFFFFFFU)
+  let cp_max = @treemath.copath(0U, max_leaves)
+  assert_eq(cp_max.length(), 30)
+
+  // Overflowing n_leaves > MAX_LEAVES must not wrap around or loop
+  for bad_n in [0x40000001U, 0x7FFFFFFFU, 0x80000000U, 0x80000001U, 0xFFFFFFFFU] {
+    assert_eq(@treemath.node_width(bad_n), 0U)
+    assert_eq(@treemath.root(bad_n), 0U)
+    assert_eq(@treemath.parent(0U, bad_n), None)
+    assert_eq(@treemath.parent(0x7FFFFFFFU, bad_n), None)
+    assert_eq(@treemath.parent(0xFFFFFFFFU, bad_n), None)
+    assert_eq(@treemath.sibling(0U, bad_n), None)
+    assert_eq(@treemath.sibling(0xFFFFFFFFU, bad_n), None)
+    assert_eq(@treemath.direct_path(0U, bad_n), [])
+    assert_eq(@treemath.direct_path(0xFFFFFFFFU, bad_n), [])
+    assert_eq(@treemath.copath(0U, bad_n), [])
+    assert_eq(@treemath.copath(0xFFFFFFFFU, bad_n), [])
+  }
+
+  // Overflowing leaf_to_node must not wrap to leaf 0
+  assert_eq(@treemath.leaf_to_node(0x40000000U), 0xFFFFFFFEU)
+  assert_eq(@treemath.leaf_to_node(0x80000000U), 0xFFFFFFFEU)
+  assert_eq(@treemath.leaf_to_node(0xFFFFFFFFU), 0xFFFFFFFEU)
+
+  // Extreme node indices on left/right/subtree_range/common_ancestor
+  assert_eq(@treemath.left(0xFFFFFFFFU), None)
+  assert_eq(@treemath.right(0xFFFFFFFFU), None)
+  assert_eq(@treemath.subtree_range(0x7FFFFFFFU), (0U, 0x7FFFFFFFU))
+  assert_eq(@treemath.subtree_range(0xFFFFFFFFU), (0U, 0xFFFFFFFFU))
+  assert_eq(@treemath.common_ancestor(0xFFFFFFFFU, 0xFFFFFFFFU), 0xFFFFFFFFU)
+  assert_eq(@treemath.common_ancestor(0U, 0xFFFFFFFFU), 0xFFFFFFFFU)
+  assert_eq(@treemath.common_ancestor(0U, 0x80000000U), 0x7FFFFFFFU)
+  assert_eq(@treemath.parent(0xFFFFFFFFU, 16U), None)
+  assert_eq(@treemath.sibling(0xFFFFFFFFU, 16U), None)
+  assert_eq(@treemath.direct_path(0xFFFFFFFFU, 16U), [])
+  assert_eq(@treemath.copath(0xFFFFFFFFU, 16U), [])
+}

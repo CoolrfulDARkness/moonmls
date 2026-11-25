@@ -68,12 +68,8 @@ fn aes128_expand_key(key : Bytes) -> FixedArray[UInt32] {
 
 ///|
 fn aes_xtime(a : Int32) -> Int32 {
-  let shifted = a << 1
-  if (a & 0x80) != 0 {
-    (shifted ^ 0x1b) & 0xff
-  } else {
-    shifted & 0xff
-  }
+  let mask = -(a >> 7)
+  ((a << 1) ^ (0x1b & mask)) & 0xff
 }
 
 ///|
@@ -206,7 +202,7 @@ fn ghash_update_bytes(
   let mut cur_hi = y_hi
   let mut cur_lo = y_lo
   let mut off = 0
-  while off + 16 <= len {
+  while len - off >= 16 {
     let b_hi = load_be64(data, start + off)
     let b_lo = load_be64(data, start + off + 8)
     let next = gf128_mul(cur_hi ^ b_hi, cur_lo ^ b_lo, h_hi, h_lo)
@@ -308,9 +304,12 @@ pub fn aes128_gcm_seal(
   if nonce.length() != 12 {
     raise InvalidNonceLength
   }
+  let pt_len = plaintext.length()
+  if pt_len > 0x7FFFFFEF {
+    raise InvalidInputLength
+  }
   let rk = aes128_expand_key(key)
   let j0 = gcm_make_j0(nonce)
-  let pt_len = plaintext.length()
   let ct_arr = gcm_gctr(rk, j0, plaintext, pt_len)
   let ct_bytes = bytes_from_fixed(ct_arr)
   let tag = gcm_compute_tag(rk, j0, aad, ct_bytes, pt_len)

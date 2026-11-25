@@ -15,6 +15,8 @@ pub(all) suberror ScheduleError {
   DecryptionFailed
   InvalidWireFormat
   UnexpectedContentType
+  GroupContextMismatch
+  SenderMismatch
 }
 
 ///|
@@ -44,6 +46,8 @@ pub impl Show for ScheduleError with fn output(self, logger) {
     DecryptionFailed => logger.write_string("DecryptionFailed")
     InvalidWireFormat => logger.write_string("InvalidWireFormat")
     UnexpectedContentType => logger.write_string("UnexpectedContentType")
+    GroupContextMismatch => logger.write_string("GroupContextMismatch")
+    SenderMismatch => logger.write_string("SenderMismatch")
   }
 }
 

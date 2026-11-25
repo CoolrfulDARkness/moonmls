@@ -382,8 +382,11 @@ pub fn chacha20_poly1305_seal(
   if nonce.length() != 12 {
     raise InvalidNonceLength
   }
-  let otk = chacha20_block(key, 0U, nonce)
   let pt_len = plaintext.length()
+  if pt_len > 0x7FFFFFEF {
+    raise InvalidInputLength
+  }
+  let otk = chacha20_block(key, 0U, nonce)
   let ct_arr = chacha20_xor_slice(key, 1U, nonce, plaintext, pt_len)
   let ct_bytes = bytes_from_fixed(ct_arr)
   let tag = chacha20_poly1305_tag(otk, aad, ct_bytes, pt_len)
