@@ -9,7 +9,10 @@ fn hex_prefix(data : Bytes, n_bytes : Int32) -> String {
 fn ascii_bytes_to_string(data : Bytes) -> String {
   let buf = StringBuilder()
   for i = 0; i < data.length(); i = i + 1 {
-    buf.write_char(Int32::unsafe_to_char(data[i].to_int()))
+    match Int32::to_char(data[i].to_int()) {
+      Some(c) => buf.write_char(c)
+      None => ()
+    }
   }
   buf.to_string()
 }

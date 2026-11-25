@@ -53,6 +53,9 @@ jobs:
             exit 1
           fi
 
+      - name: Check README sync
+        run: diff -u README.mbt.md README.md
+
       - name: Run tests (wasm-gc, -d)
         run: moon test --target wasm-gc -d
 
@@ -65,5 +68,17 @@ jobs:
       - name: Verify benchmarks build (wasm-gc, -d)
         run: moon bench --build-only --target wasm-gc -d
 
+      - name: Verify benchmarks build (js, -d)
+        run: moon bench --build-only --target js -d
+
+      - name: Verify benchmarks build (native, -d)
+        run: moon bench --build-only --target native -d
+
       - name: CLI demo smoke check (wasm-gc)
         run: moon run cmd/main --target wasm-gc
+
+      - name: CLI demo smoke check (js)
+        run: moon run cmd/main --target js
+
+      - name: CLI demo smoke check (native)
+        run: moon run cmd/main --target native

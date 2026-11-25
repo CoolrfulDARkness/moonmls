@@ -1,9 +1,9 @@
 # MoonMLS — Pure MoonBit IETF RFC 9420 MLS & RFC 9180 HPKE Protocol Stack
 
-**纯 MoonBit · 零 FFI · 零外部依赖 · Sans-I/O 端到端群组加密协议栈**
-*Pure MoonBit, Zero-FFI, Zero-Dependency, Sans-I/O Implementation of IETF RFC 9420 Messaging Layer Security (MLS 1.0) & RFC 9180 HPKE*
+**纯 MoonBit · 零 FFI · 零 `unsafe` · 零外部依赖 · Sans-I/O 端到端群组加密协议栈**
+*Pure MoonBit, Zero-FFI, Zero-Unsafe, Zero-Dependency, Sans-I/O Implementation of IETF RFC 9420 Messaging Layer Security (MLS 1.0) & RFC 9180 HPKE*
 
-> **2026 MoonBit 年度黑客松参赛作品** · 完整覆盖 RFC 9420 群组安全协议全栈，通过 IETF `mls-implementations` 全套官方测试向量逐字节校验与 26 项对抗安全测试，一套代码无修改原生运行于 `wasm-gc` / `js` / `native` 三端（`-d` 零警告）。
+> **2026 MoonBit 年度黑客松参赛作品** · 完整覆盖 RFC 9420 群组安全协议全栈，通过 IETF `mls-implementations` 全部 11 份官方测试向量文件逐字节校验与 32 项红队对抗安全测试（`SEC-01` ~ `SEC-32`），一套代码无修改原生运行于 `wasm-gc` / `js` / `native` 三端（160 项测试 + 15 项基准，全量 `-d` 零警告）。
 
 ---
 
@@ -12,16 +12,16 @@
 - **双完整密码套件（Dual RFC 9420 CipherSuites）**：
   - **CS1 (`0x0001`)**：`MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519`
   - **CS3 (`0x0003`)**：`MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_Ed25519`
-- **100% 纯 MoonBit · 零 FFI · 零外部依赖**：
-  - 从底层有限域 $\mathbb{F}_{2^{255}-19}$ 算术、X25519（含低阶点拒绝）、Ed25519（RFC 8032 严格规范性校验防延展性）、SHA-256 / SHA-512、HMAC / HKDF、AES-128-GCM、ChaCha20-Poly1305、RFC 9180 HPKE Base Mode，到上层 Left-Balanced Binary Tree、Ratchet Tree、TreeKEM、Secret Tree、Epoch Key Schedule 与 `MlsGroup` 状态机，全部以纯 MoonBit 实现。
-- **严格 Sans-I/O 与强原子性（Atomic State Machine）**：
+- **100% 纯 MoonBit · 零 FFI · 零 `unsafe` · 零外部依赖**：
+  - 从底层有限域 $\mathbb{F}_{2^{255}-19}$ 算术、X25519（含 7 类低阶点拒绝）、Ed25519（RFC 8032 严格 $S < L$ 规范性与 8 阶小阶/单位元公钥拒绝）、SHA-256 / SHA-512、HMAC / HKDF、AES-128-GCM、ChaCha20-Poly1305、RFC 9180 HPKE Base Mode，到上层 Left-Balanced Binary Tree、Ratchet Tree、TreeKEM、Secret Tree、Epoch Key Schedule 与 `MlsGroup` 状态机，全部以纯 MoonBit 编写。
+- **严格 Sans-I/O、真纪元内前向安全与强原子性**：
   - 协议内核零网络 I/O、零文件 I/O、零全局可变状态，通过前向安全确定性 CSPRNG（`DeterministicRng`）注入熵源。
-  - 所有消息解密、Commit 推进与 Welcome 验证均先完成全部密码学验证，再原子切换状态；任何篡改、重放或越权攻击保证**零状态污染**。
+  - `SecretTree` 按 RFC 9420 §9.2 按需分裂节点并立即擦除父节点及根 `encryption_secret`，纪元初始化后 `MlsGroup` 不保留一次性根秘密；单叶 `O(1)` 轻量试探（`RatchetStage`）先于解密拦截重放与超前跳跃，待 AEAD、签名与 Commit 全验通过后再原子写回，任何攻击保证**零状态污染**。
 - **端到端安全属性实证**：
-  - **前向安全（Forward Secrecy, FS）**：SecretTree 每代密钥消费即毁；Epoch 切换立即销毁旧代密钥表，跨 Epoch 密文严格拦截。
-  - **事后安全（Post-Compromise Security, PCS）**：成员通过 `Update` + `Commit` 触发 TreeKEM 全路径密钥更新，彻底革新 `tree_hash`、`epoch_authenticator` 与 `MLS-Exporter`。
-  - **动态成员管理与乱序容错**：支持 `Add` / `Update` / `Remove`、`Welcome` 加群、空白叶子复用与 `unmerged_leaves` 处理、SecretTree 滑动乱序窗口与同代重放拦截。
-- **三端一码通行，`-d` 零警告**：全仓测试、基准测试与 5 人群组 CLI 演示在 `wasm-gc`、`js`、`native` 三大后端全部 100% 通过且零编译器警告。
+  - **前向安全（Forward Secrecy, FS）**：SecretTree 按需分裂即删父节点、每代密钥消费即毁；Epoch 切换立即销毁旧代密钥，跨 Epoch 密文严格拦截。
+  - **事后安全（Post-Compromise Security, PCS）**：成员通过 `Update` + `Commit` 触发 TreeKEM 全路径密钥更新（强制轮换与非低阶/唯一公钥校验），彻底革新 `tree_hash`、`epoch_authenticator` 与 `MLS-Exporter`。
+  - **动态成员管理与并发抗死锁**：支持 `Add` / `Update` / `Remove`、`Welcome` 加群、空白叶子复用与 `unmerged_leaves` 维护、并发 `pending_proposals` 确定性冲突过滤、SecretTree 滑动乱序窗口与同代重放拦截。
+- **三端一码通行，`-d` 零警告**：全仓 160 项测试、15 项基准与 5 人群组 CLI 演示在 `wasm-gc`、`js`、`native` 三大后端全部 100% 通过且零编译器警告。
 
 ---
 
@@ -40,7 +40,7 @@ flowchart TD
     schedule["schedule (PSK Secret, Key Schedule, Transcript Hash, Message Protection)"]
     group["group (Sans-I/O MlsGroup Engine & KeyPackageBundle)"]
     root["moonmls (Top-Level Facade API)"]
-    vectors["vectors (IETF Cross-Layer & 26 Adversarial Security Tests)"]
+    vectors["vectors (IETF Cross-Layer & 32 Adversarial Security Tests)"]
     bench["bench (15-Item 3-Target Performance Benchmarks)"]
     cli["cmd/main (One-Click 5-Member MLS Interactive Showcase)"]
 
@@ -49,9 +49,11 @@ flowchart TD
     types --> tls
     tree --> tls
     tree --> treemath
+    tree --> crypto
     tree --> ciphersuite
     tree --> types
     schedule --> tls
+    schedule --> crypto
     schedule --> ciphersuite
     schedule --> types
     group --> tls
@@ -73,15 +75,15 @@ flowchart TD
 | 包名 / Package | 职责摘要 |
 |---|---|
 | `tls` | RFC 9420 §2.1.2 严格 TLS Presentation Language 编解码器（最小 Varint 检查、尾部数据拒绝）与 Hex/Bytes 工具 |
-| `treemath` | RFC 9420 Appendix C 左平衡二叉树（LBBT）数学运算：`direct_path`、`copath`、`common_ancestor` 等 |
-| `crypto` | 零 FFI 密码学原语库：SHA-256/512、HMAC/HKDF、AES-128-GCM、ChaCha20-Poly1305、X25519、Ed25519、ChaCha20 CSPRNG |
+| `treemath` | RFC 9420 Appendix C 左平衡二叉树（LBBT）数学运算：`direct_path`、`copath`、`common_ancestor` 及安全溢出边界保护 |
+| `crypto` | 零 FFI / 零 `unsafe` 密码学原语库：SHA-256/512、HMAC/HKDF、AES-128-GCM、ChaCha20-Poly1305、X25519、Ed25519、ChaCha20 CSPRNG |
 | `ciphersuite` | CS1 / CS3 密码套件封装、MLS `ExpandWithLabel` / `SignWithLabel` / `RefHash` 与 RFC 9180 HPKE Base Mode |
 | `types` | RFC 9420 全套协议数据结构与二进制帧编解码（17 类 wire struct） |
-| `tree` | Ratchet Tree 维护、Tree Hash & Parent Hash 链验证、TreeKEM 路径加解密、Secret Tree 与 Replay Window |
+| `tree` | Ratchet Tree 维护、TreeHash & ParentHash 链验证、TreeKEM 路径加解密、真树状按需擦除 Secret Tree 与 `O(1)` 原子试探 Replay Window |
 | `schedule` | PSK Secret、Epoch Key Schedule、Transcript Hash、Confirmation/Membership Tag 与 Public/PrivateMessage 保护 |
-| `group` | 完整 Sans-I/O `MlsGroup` 状态机：`KeyPackageBundle`、`create`、`from_welcome`、`propose_*`、`commit`、`process_message` |
+| `group` | 完整 Sans-I/O 强原子 `MlsGroup` 状态机：`KeyPackageBundle`、`create`、`from_welcome`、`propose_*`、`commit`、`process_message` |
 | `moonmls` (root) | 统一门面 API，开箱即用的高级类型别名与入口函数 |
-| `vectors` | 跨层 IETF 集成校验与 26 项对抗安全测试套件（`SEC-01` ~ `SEC-26`） |
+| `vectors` | 跨层 IETF 集成校验（11 项）与 32 项红队对抗安全测试套件（`SEC-01` ~ `SEC-32`） |
 | `bench` | 15 项密码原语、协议层与 5 人群组端到端性能基准 |
 | `cmd/main` | 一键 5 人群组全生命周期 CLI 演示（含 FS、PCS、动态踢人与 CS3 双套件自检） |
 
@@ -91,25 +93,25 @@ flowchart TD
 
 全部测试向量均以纯数据形式内置于测试文件（零文件 I/O），在 `wasm-gc`、`js`、`native` 三端逐字节通过验证：
 
-| # | 官方向量文件（IETF RFC 9420） | 校验范围与细节 | 密码套件覆盖 | 所在包 | 状态 |
+| # | 官方向量文件（IETF RFC 9420） | 校验范围与覆盖口径 | 密码套件覆盖 | 所在包 | 状态 |
 |---|---|---|---|---|---|
-| 1 | `tree-math.json` | 全部 10 组树规模（1..512 叶子）的 `n_nodes` / `root` / `left` / `right` / `parent` / `sibling` / `direct_path` / `copath` | 通用 | `treemath` | PASS |
-| 2 | `crypto-basics.json` | `RefHash`、`ExpandWithLabel`、`DeriveSecret`、`DeriveTreeSecret`、`SignWithLabel`、`EncryptWithLabel`（HPKE） | CS1 & CS3 | `ciphersuite` | PASS |
-| 3 | `psk_secret.json` | 0..10 个 PSK 链式提取（CS1 11 组 + CS3 11 组，共 22 组）逐字节匹配 | CS1 & CS3 | `schedule` | PASS |
-| 4 | `key-schedule.json` | 全部 5 个 Epoch × 14 项派生字段（`group_context`, `joiner_secret`, `welcome_secret`, `init_secret`, `sender_data_secret`, `encryption_secret`, `exporter_secret`, `epoch_authenticator`, `external_secret`, `confirmation_key`, `membership_key`, `resumption_psk`, `external_pub`, `MLS-Exporter`） | CS1 & CS3 | `schedule` | PASS |
-| 5 | `secret-tree.json` | `sender_data` 密钥/Nonce 派生与全树各叶子 `handshake` / `application` 多代 ratchet 密钥逐字节匹配 | CS1 & CS3 | `tree` | PASS |
-| 6 | `message-protection.json` | `PublicMessage`（Proposal/Commit 验签、MembershipTag 校验与重编码）与 `PrivateMessage`（Proposal/Commit/Application 解包解密验签） | CS1 & CS3 | `schedule` | PASS |
-| 7 | `tree-operations.json` | 全部 5 组官方树变更向量（Add / Update / Remove，含空白复用与右子树截半）前后 `tree_hash` 与序列化树逐字节一致 | CS1 | `tree` | PASS |
-| 8 | `tree-validation.json` | 官方全量树结构、节点哈希、`tree_hash`、父哈希链覆盖（§7.9.2）与叶子签名校验 | CS1 & CS3 | `tree` | PASS |
-| 9 | `treekem.json` | 官方多组 TreeKEM `UpdatePath` 解密、路径密钥向上派生、公开路径加密与 `commit_secret` 逐字节校验 | CS1 & CS3 | `tree` | PASS |
-| 10 | `welcome.json` | `KeyPackage` 验签、`EncryptedGroupSecrets` HPKE 解密、`GroupInfo` 解密与签名校验、`EpochSecrets` 派生与 `ConfirmationTag` 验证 | CS1 & CS3 | `group` | PASS |
-| + | `messages.json` | 全部 **17 类** RFC 9420 Wire Struct（`MLSMessage` Welcome/GroupInfo/KeyPackage、`RatchetTree`、`GroupSecrets`、7 类 `Proposal`、`Commit`、3 类 `PublicMessage`、`PrivateMessage`）解码 + 逐字节往返重编码 | 全协议 | `types` | PASS |
+| 1 | `tree-math.json` | 全部 10 组树规模（`1..512` 叶子）的官方 `n_nodes` / `root` / `left` / `right` / `parent` / `sibling` 字段逐项匹配，并交叉校验 `direct_path` / `copath` 一致性 | 通用（全量 10/10） | `treemath`, `vectors` | PASS |
+| 2 | `crypto-basics.json` | 全部 6 项原语：`RefHash`、`ExpandWithLabel`、`DeriveSecret`、`DeriveTreeSecret`、`SignWithLabel`、`EncryptWithLabel`（HPKE） | CS1 & CS3（全量 2/2） | `ciphersuite`, `vectors` | PASS |
+| 3 | `psk_secret.json` | 0..10 个 PSK 链式提取（CS1 11 组 + CS3 11 组，共 22 组）逐字节匹配 | CS1 & CS3（全量 22/22） | `schedule`, `vectors` | PASS |
+| 4 | `key-schedule.json` | 全部 5 个 Epoch × 14 项派生字段（`group_context`, `joiner_secret`, `welcome_secret`, `init_secret`, `sender_data_secret`, `encryption_secret`, `exporter_secret`, `epoch_authenticator`, `external_secret`, `confirmation_key`, `membership_key`, `resumption_psk`, `external_pub`, `MLS-Exporter`） | CS1 & CS3（全量 2/2） | `schedule`, `vectors` | PASS |
+| 5 | `secret-tree.json` | 全部 6 组向量（`1 / 8 / 32` 叶子 × CS1/CS3，共 164 组 generation）：`sender_data` 密钥/Nonce 派生与各叶子 `handshake` / `application` 棘轮密钥逐字节匹配 | CS1 & CS3（全量 6/6） | `tree`, `vectors` | PASS |
+| 6 | `message-protection.json` | `PublicMessage`（Proposal/Commit 验签、MembershipTag 校验与重编码）与 `PrivateMessage`（Proposal/Commit/Application 联合 `SecretTree` 解包解密验签） | CS1 & CS3（全量 2/2） | `schedule`, `vectors` | PASS |
+| 7 | `tree-operations.json` | 全部 5 组官方树变更向量（Add / Update / Remove，含空白复用与右子树截半）前后 `tree_hash` 与序列化树逐字节一致（注：官方文件仅定义 CS1） | CS1（全量 5/5） | `tree`, `vectors` | PASS |
+| 8 | `tree-validation.json` | 16 组代表性树向量（CS1 8 组 + CS3 8 组，3..15 节点含空位与多层 `unmerged_leaves`）的树结构、逐节点哈希、`resolution`、父哈希链覆盖（§7.9.2）与叶子签名校验 | CS1 & CS3（16/28 代表子集） | `tree`, `vectors` | PASS |
+| 9 | `treekem.json` | 8 组代表性 TreeKEM 向量（CS1 4 组 + CS3 4 组，含 `unmerged_leaves`）：`UpdatePath` 合并、`tree_hash`、父哈希校验、路径解密与 `commit_secret` + KeySchedule 同步校验 | CS1 & CS3（8/22 代表子集） | `tree`, `vectors` | PASS |
+| 10 | `welcome.json` | `KeyPackage` 验签、`EncryptedGroupSecrets` HPKE 解密、`GroupInfo` 解密与签名校验、`EpochSecrets` 派生与 `ConfirmationTag` 校验 | CS1 & CS3（全量 2/2） | `group`, `vectors` | PASS |
+| 11 | `messages.json` | 6 组跨套件样本（共 102 个官方对象），覆盖全部 **17 类** RFC 9420 Wire Struct 解码与逐字节往返重编码 | CS1 / CS2 / CS3（6/300 代表子集） | `types` | PASS |
 
 ---
 
-## 26 项对抗安全测试覆盖矩阵（Adversarial Security Matrix）
+## 32 项红队对抗安全测试矩阵（Adversarial Security Matrix）
 
-MoonMLS 针对 RFC 9420 真实威胁模型构造了 26 项对抗攻击测试（`vectors/`），验证所有恶意输入均被精确拦截且不污染群组状态：
+MoonMLS 针对 RFC 9420 真实威胁模型与红队对抗审计结果构造了 32 项独立对抗测试（[security_adversarial_test.mbt](file:///d:/moonbit-mls/vectors/security_adversarial_test.mbt)），验证所有恶意输入均被精确拦截且不污染群组状态：
 
 | 编号 | 攻击场景 / 威胁类别 | 预期防御行为 | 状态 |
 |---|---|---|---|
@@ -137,34 +139,40 @@ MoonMLS 针对 RFC 9420 真实威胁模型构造了 26 项对抗攻击测试（`
 | `SEC-22` | 被踢出成员（Removed）发消息 & 尝试解密新 Epoch 消息 | 被踢者报 `MemberRemoved`，伪造/旧代密文被群拒绝 | PASS |
 | `SEC-23` | 禁止自踢与踢出空白叶子攻击 | 报 `CannotRemoveSelf` / `InvalidProposal` | PASS |
 | `SEC-24` | TLS 编解码器畸形报文（非最小 Varint / `0xC0` 前缀 / 截断 / 尾部垃圾） | 报 `NonMinimalVarint` / `InvalidVarint` / `UnexpectedEof` / `TrailingData` | PASS |
-| `SEC-25` | X25519 低阶点（全零点 / 阶 8 点）贡献全零共享密钥攻击 | 报 `LowOrderPoint` | PASS |
+| `SEC-25` | X25519 全部 7 类低阶点攻击 | 报 `LowOrderPoint`（穿透至 CS1/CS3 HPKE） | PASS |
 | `SEC-26` | 前向安全（FS）与事后安全（PCS）双套件密码学实证 | 覆盖 CS1 & CS3：旧代销毁不可复用、轮换/踢人后全套密钥指纹彻底革新 | PASS |
+| `SEC-27` | Ed25519 单位元公钥（`[0x01, 0x00..]`）与 8 阶小阶挠点公钥伪造 | `ed25519_verify` / `verify_key_package` / `propose_add` 全部严格拒绝 | PASS |
+| `SEC-28` | 恶意 `UpdatePath` 注入重复公钥、未轮换叶密钥或低阶点 | `merge_update_path_nodes` 强制全树校验拒绝，防止群组砖化/分裂 | PASS |
+| `SEC-29` | 含 `Remove(victim)` 但 `path = None` 或坏 `UpdatePath` 的非法 Commit | 受害者严格拒绝并保持 `active == true`，禁止单方面踢出 DoS | PASS |
+| `SEC-30` | 并发与恶意投毒 `pending_proposals` 队列死锁攻击 | RFC 9420 §12.4.1 三趟确定性冲突过滤，Commit 正常推进绝不死锁 | PASS |
+| `SEC-31` | `SecretTree` `O(1)` 原子试探、非空根 `parent_hash` 篡改、全空树与无 `path_secret` Welcome 锁死 | `stage_key_nonce` 失败零污染，非法根/空树/未列 `unmerged_leaves` 全部拒绝 | PASS |
+| `SEC-32` | 非法 `Capabilities`、重复扩展类型、低阶 `init_key` 与 `schedule` 上下文跨群混淆 | 严格校验扩展去重/能力匹配/`SenderMismatch`/`GroupContextMismatch` | PASS |
 
 ---
 
 ## 实测三端性能基准 / Benchmarks (`moon bench`)
 
-实测环境：`moonc v0.10.22` · Windows x86_64 · 运行命令 `moon bench bench --target <wasm-gc|native|js> -d`（全部 15 项 100% 通过、零 FFI 纯 MoonBit 实现）：
+实测环境：`moonc v0.10.22` · Windows x86_64 · 运行命令 `moon bench bench --target <wasm-gc|native|js> -d`（`-d` 为 `--deny-warn`，`moon bench` 默认 release 构建；全部 15 项 100% 通过、零 FFI / 零 `unsafe` 纯 MoonBit 实现）：
 
-| 类别 | 基准项（Benchmark） | `wasm-gc` (mean ± σ) | `native` `-d` (mean ± σ) | `js` (mean ± σ) |
+| 类别 | 基准项（Benchmark） | `wasm-gc` (mean ± σ) | `native` (mean ± σ) | `js` (mean ± σ) |
 |---|---|---:|---:|---:|
-| **密码原语** | `sha256 (1 KiB)` | **4.92 µs** ± 246.58 ns | 5.73 µs ± 293.53 ns | 11.04 µs ± 236.10 ns |
-| **密码原语** | `aes128_gcm seal+open (1 KiB)` | **54.27 µs** ± 1.76 µs | 63.44 µs ± 919.57 ns | 1.82 ms ± 53.91 µs |
-| **密码原语** | `chacha20_poly1305 seal+open (1 KiB)` | **15.67 µs** ± 301.27 ns | 18.56 µs ± 284.34 ns | 87.64 µs ± 1.29 µs |
-| **密码原语** | `x25519 scalar_mult` | **99.81 µs** ± 6.96 µs | 285.69 µs ± 2.43 µs | 1.64 ms ± 34.19 µs |
-| **密码原语** | `ed25519 sign (64B msg)` | **470.54 µs** ± 20.83 µs | 1.31 ms ± 10.57 µs | 6.44 ms ± 178.07 µs |
-| **密码原语** | `ed25519 verify (64B msg)` | **438.38 µs** ± 15.85 µs | 1.28 ms ± 17.43 µs | 6.30 ms ± 243.17 µs |
-| **协议核心** | `hpke seal+open base (CS1 AES-128-GCM, 64B)` | **513.04 µs** ± 15.32 µs | 1.67 ms ± 124.08 µs | 10.32 ms ± 319.90 µs |
-| **协议核心** | `hpke seal+open base (CS3 ChaCha20-Poly1305, 64B)` | **493.62 µs** ± 15.60 µs | 1.88 ms ± 94.59 µs | 11.33 ms ± 262.81 µs |
-| **协议核心** | `treemath direct_path + copath (1024 leaves)` | **321.97 ns** ± 26.33 ns | 450.66 ns ± 13.84 ns | 554.83 ns ± 6.20 ns |
-| **协议核心** | `ratchet_tree tree_hash (32 leaves)` | **87.68 µs** ± 2.05 µs | 199.90 µs ± 2.66 µs | 415.82 µs ± 11.93 µs |
-| **协议核心** | `epoch key_schedule derive (CS1)` | **119.09 µs** ± 2.44 µs | 380.44 µs ± 4.93 µs | 2.11 ms ± 163.88 µs |
-| **协议核心** | `secret_tree application key_nonce derive (32 leaves)` | **14.03 µs** ± 399.13 ns | 28.26 µs ± 779.79 ns | 44.73 µs ± 5.15 µs |
-| **群组端到端** | `key_package generate+verify` | **2.12 ms** ± 238.24 µs | 6.44 ms ± 69.61 µs | 34.03 ms ± 2.26 ms |
-| **群组端到端** | `group_5_members protect+unprotect (64B)` | **1.93 ms** ± 423.54 µs | 3.49 ms ± 109.36 µs | 13.78 ms ± 272.52 µs |
-| **群组端到端** | `group_5_members update+commit+process` | **16.35 ms** ± 1.35 ms | 46.89 ms ± 829.10 µs | 297.68 ms ± 197.45 ms |
+| **密码原语** | `sha256 (1 KiB)` | **6.73 µs** ± 190.25 ns | 7.17 µs ± 252.95 ns | 13.32 µs ± 380.92 ns |
+| **密码原语** | `aes128_gcm seal+open (1 KiB)` | 76.55 µs ± 5.67 µs | **71.40 µs** ± 4.92 µs | 1.88 ms ± 34.55 µs |
+| **密码原语** | `chacha20_poly1305 seal+open (1 KiB)` | 21.11 µs ± 896.08 ns | **20.20 µs** ± 370.88 ns | 92.86 µs ± 2.49 µs |
+| **密码原语** | `x25519 scalar_mult` | **131.18 µs** ± 4.75 µs | 308.26 µs ± 3.18 µs | 1.95 ms ± 23.67 µs |
+| **密码原语** | `ed25519 sign (64B msg)` | **504.39 µs** ± 23.66 µs | 1.66 ms ± 53.62 µs | 8.13 ms ± 194.88 µs |
+| **密码原语** | `ed25519 verify (64B msg)` | **549.03 µs** ± 35.78 µs | 1.49 ms ± 40.84 µs | 7.67 ms ± 190.96 µs |
+| **协议核心** | `hpke seal+open base (CS1 AES-128-GCM, 64B)` | **721.31 µs** ± 28.73 µs | 2.53 ms ± 91.56 µs | 10.05 ms ± 385.85 µs |
+| **协议核心** | `hpke seal+open base (CS3 ChaCha20-Poly1305, 64B)` | **734.27 µs** ± 26.59 µs | 2.20 ms ± 65.00 µs | 10.14 ms ± 201.27 µs |
+| **协议核心** | `treemath direct_path + copath (1024 leaves)` | 457.20 ns ± 14.83 ns | 660.76 ns ± 9.49 ns | **411.96 ns** ± 6.61 ns |
+| **协议核心** | `ratchet_tree tree_hash (32 leaves)` | **114.62 µs** ± 9.47 µs | 258.09 µs ± 9.13 µs | 326.35 µs ± 14.90 µs |
+| **协议核心** | `epoch key_schedule derive (CS1)` | **138.89 µs** ± 4.91 µs | 478.14 µs ± 13.44 µs | 2.20 ms ± 148.77 µs |
+| **协议核心** | `secret_tree application key_nonce derive (32 leaves)` | **28.33 µs** ± 1.05 µs | 78.88 µs ± 33.94 µs | 76.04 µs ± 2.60 µs |
+| **群组端到端** | `key_package generate+verify` | **3.13 ms** ± 186.78 µs | 9.85 ms ± 601.02 µs | 50.64 ms ± 4.75 ms |
+| **群组端到端** | `group_5_members protect+unprotect (64B)` | **952.22 µs** ± 24.85 µs | 4.01 ms ± 179.23 µs | 16.41 ms ± 1.02 ms |
+| **群组端到端** | `group_5_members update+commit+process` | **34.63 ms** ± 1.66 ms | 100.89 ms ± 2.75 ms | 509.14 ms ± 51.76 ms |
 
-> 亮点：纯 MoonBit `wasm-gc` 后端在零 FFI 前提下实现 **< 100 µs 的 X25519 密钥交换**、**~15.7 µs 的 1 KiB ChaCha20-Poly1305 加解密往返**、**1.93 ms 的 5 人群组消息全流程端到端加密与解密验签**，以及 **16.35 ms 的完整 5 人 TreeKEM PCS 密钥轮换（含 4 名同侪全部完成 Proposal + Commit 验证与路径解密）**。
+> 亮点：在引入真树状按需擦除 `SecretTree` 与 `O(1)` 原子试探后，纯 MoonBit `wasm-gc` 后端在零 FFI / 零 `unsafe` 前提下实现 **亚毫秒级（`952.22 µs`）的 5 人群组消息全流程端到端加密 + 解密验签**、**`~21 µs` 的 1 KiB ChaCha20-Poly1305 加解密往返**，以及 **完整 5 人 TreeKEM PCS 密钥轮换（含全树结构与低阶点强校验）`34.63 ms`**。
 
 ---
 
@@ -172,8 +180,7 @@ MoonMLS 针对 RFC 9420 真实威胁模型构造了 26 项对抗攻击测试（`
 
 在 `moon.pkg` 中引入顶层包 `CoolrfulDARkness/moonmls`：
 
-```moonbit nocheck
-///|
+```text
 import {
   "CoolrfulDARkness/moonmls" @mls,
   "CoolrfulDARkness/moonmls/types",
@@ -243,7 +250,7 @@ moon run cmd/main --target native
 6. 动态踢人：Alice 执行 `Remove(Eve)` + `Commit`（Epoch 4），4 名留存成员继续互通，Eve 无法解密新消息且伪造密文被拒
 7. 双密码套件 **CS3（ChaCha20-Poly1305）** 端到端建群、通信与 PCS 轮换自检
 
-### 2. 运行全量单元测试、IETF 官方向量与 26 项对抗安全测试（三端 `-d` 零警告）
+### 2. 运行全量 160 项测试、IETF 官方向量与 32 项红队对抗安全测试（三端 `-d` 零警告）
 
 ```bash
 moon test --target wasm-gc -d
