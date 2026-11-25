@@ -1,5 +1,5 @@
 ///|
-fn make_pattern_bytes(len : Int, salt : Int) -> Bytes {
+fn make_pattern_bytes(len : Int32, salt : Int32) -> Bytes {
   Bytes::makei(len, fn(i) { ((i * 31 + salt * 17 + 7) & 0xFF).to_byte() })
 }
 
@@ -47,11 +47,11 @@ test "chacha20_poly1305 seal+open (1 KiB)" (b : @bench.T) {
 test "x25519 scalar_mult" (b : @bench.T) {
   let sk_a = make_pattern_bytes(32, 10)
   let sk_b = make_pattern_bytes(32, 11)
-  let pk_b = try @crypto.x25519_public_key(sk_b) catch {
+  let pk_b = @crypto.x25519_public_key(sk_b) catch {
     e => abort(Show::to_string(e))
   }
   b.bench(name="x25519 scalar_mult", fn() {
-    let shared = try @crypto.x25519_dh(sk_a, pk_b) catch {
+    let shared = @crypto.x25519_dh(sk_a, pk_b) catch {
       e => abort(Show::to_string(e))
     }
     b.keep(shared)
@@ -63,7 +63,7 @@ test "ed25519 sign (64B msg)" (b : @bench.T) {
   let seed = make_pattern_bytes(32, 12)
   let msg = make_pattern_bytes(64, 13)
   b.bench(name="ed25519 sign (64B msg)", fn() {
-    let sig = try @crypto.ed25519_sign(seed, msg) catch {
+    let sig = @crypto.ed25519_sign(seed, msg) catch {
       e => abort(Show::to_string(e))
     }
     b.keep(sig)
@@ -74,10 +74,10 @@ test "ed25519 sign (64B msg)" (b : @bench.T) {
 test "ed25519 verify (64B msg)" (b : @bench.T) {
   let seed = make_pattern_bytes(32, 14)
   let msg = make_pattern_bytes(64, 15)
-  let pk = try @crypto.ed25519_public_key(seed) catch {
+  let pk = @crypto.ed25519_public_key(seed) catch {
     e => abort(Show::to_string(e))
   }
-  let sig = try @crypto.ed25519_sign(seed, msg) catch {
+  let sig = @crypto.ed25519_sign(seed, msg) catch {
     e => abort(Show::to_string(e))
   }
   b.bench(name="ed25519 verify (64B msg)", fn() {

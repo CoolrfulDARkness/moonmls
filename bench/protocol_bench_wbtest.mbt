@@ -1,5 +1,5 @@
 ///|
-fn make_bench_leaf(cs : @cs.CipherSuite, idx : Int) -> @types.LeafNode {
+fn make_bench_leaf(cs : @cs.CipherSuite, idx : Int32) -> @types.LeafNode {
   let enc_key = make_pattern_bytes(32, 100 + idx)
   let sig_key = make_pattern_bytes(32, 200 + idx)
   let id_bytes = make_pattern_bytes(16, 300 + idx)
@@ -17,7 +17,7 @@ fn make_bench_leaf(cs : @cs.CipherSuite, idx : Int) -> @types.LeafNode {
     credential: @types.Credential::Basic(id_bytes),
     capabilities: caps,
     leaf_node_source: @types.LeafNodeSource::KeyPackage,
-    lifetime: Some({ not_before: 0UL, not_after: 9999999999UL }),
+    lifetime: Some({ not_before: 0UL, not_after: 9999999999UL, }),
     parent_hash: None,
     extensions: [],
     signature: sig,
@@ -28,7 +28,7 @@ fn make_bench_leaf(cs : @cs.CipherSuite, idx : Int) -> @types.LeafNode {
 test "hpke seal+open base (CS1 AES-128-GCM, 64B)" (b : @bench.T) {
   let cs = @cs.CipherSuite::X25519Aes128GcmSha256Ed25519
   let ikm = make_pattern_bytes(32, 21)
-  let (sk_r, pk_r) = try cs.kem_keypair_from_ikm(ikm) catch {
+  let (sk_r, pk_r) = cs.kem_keypair_from_ikm(ikm) catch {
     e => abort(Show::to_string(e))
   }
   let info = b"moonmls-hpke-bench-cs1"
@@ -50,7 +50,7 @@ test "hpke seal+open base (CS1 AES-128-GCM, 64B)" (b : @bench.T) {
 test "hpke seal+open base (CS3 ChaCha20-Poly1305, 64B)" (b : @bench.T) {
   let cs = @cs.CipherSuite::X25519ChaCha20Poly1305Sha256Ed25519
   let ikm = make_pattern_bytes(32, 24)
-  let (sk_r, pk_r) = try cs.kem_keypair_from_ikm(ikm) catch {
+  let (sk_r, pk_r) = cs.kem_keypair_from_ikm(ikm) catch {
     e => abort(Show::to_string(e))
   }
   let info = b"moonmls-hpke-bench-cs3"
@@ -84,14 +84,12 @@ test "ratchet_tree tree_hash (32 leaves)" (b : @bench.T) {
   let cs = @cs.CipherSuite::X25519Aes128GcmSha256Ed25519
   let rt = @tree.RatchetTreeState::new(make_bench_leaf(cs, 0))
   for i = 1; i < 32; i = i + 1 {
-    let _ = try rt.add_leaf(make_bench_leaf(cs, i)) catch {
+    let _ = rt.add_leaf(make_bench_leaf(cs, i)) catch {
       e => abort(Show::to_string(e))
     }
   }
   b.bench(name="ratchet_tree tree_hash (32 leaves)", fn() {
-    let h = try rt.tree_hash(cs) catch {
-      e => abort(Show::to_string(e))
-    }
+    let h = rt.tree_hash(cs) catch { e => abort(Show::to_string(e)) }
     b.keep(h)
   })
 }
@@ -112,16 +110,14 @@ test "epoch key_schedule derive (CS1)" (b : @bench.T) {
     extensions: [],
   }
   let w = @tls.Writer::new()
-  try gc.encode(w) catch {
+  gc.encode(w) catch {
     e => abort(Show::to_string(e))
   }
   let gc_bytes = w.to_bytes()
   b.bench(name="epoch key_schedule derive (CS1)", fn() {
-    let secrets = try
-      @schedule.derive_epoch_secrets(
-        cs, prev_init, commit_secret, psk_secret, gc_bytes,
-      )
-    catch {
+    let secrets = @schedule.derive_epoch_secrets(
+      cs, prev_init, commit_secret, psk_secret, gc_bytes,
+    ) catch {
       e => abort(Show::to_string(e))
     }
     b.keep(secrets)
@@ -134,7 +130,7 @@ test "secret_tree application key_nonce derive (32 leaves)" (b : @bench.T) {
   let enc_secret = make_pattern_bytes(32, 41)
   b.bench(name="secret_tree application key_nonce derive (32 leaves)", fn() {
     let st = @tree.SecretTree::new(cs, enc_secret, 32U)
-    let kn = try st.next_application_key_nonce(15U) catch {
+    let kn = st.next_application_key_nonce(15U) catch {
       e => abort(Show::to_string(e))
     }
     b.keep(kn)

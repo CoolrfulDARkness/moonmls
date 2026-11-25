@@ -1,5 +1,9 @@
-// import {
-//   "CoolrfulDARkness/moonmls" @lib,
-// }
+import {
+  "CoolrfulDARkness/moonmls" @mls,
+  "CoolrfulDARkness/moonmls/tls",
+  "CoolrfulDARkness/moonmls/types",
+  "CoolrfulDARkness/moonmls/group",
+  "CoolrfulDARkness/moonmls/tree",
+}
 
 pkgtype(kind: "executable")

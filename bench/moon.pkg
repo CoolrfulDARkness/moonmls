@@ -1,10 +1,11 @@
 import {
-  "moonbitlang/core/bench" @bench,
-  "CoolrfulDARkness/moonmls/tls" @tls,
-  "CoolrfulDARkness/moonmls/treemath" @treemath,
-  "CoolrfulDARkness/moonmls/crypto" @crypto,
+  "moonbitlang/core/bench",
+  "CoolrfulDARkness/moonmls/tls",
+  "CoolrfulDARkness/moonmls/treemath",
+  "CoolrfulDARkness/moonmls/crypto",
   "CoolrfulDARkness/moonmls/ciphersuite" @cs,
-  "CoolrfulDARkness/moonmls/types" @types,
-  "CoolrfulDARkness/moonmls/tree" @tree,
-  "CoolrfulDARkness/moonmls/schedule" @schedule,
+  "CoolrfulDARkness/moonmls/types",
+  "CoolrfulDARkness/moonmls/tree",
+  "CoolrfulDARkness/moonmls/schedule",
+  "CoolrfulDARkness/moonmls/group",
 } for "wbtest"
