@@ -1,0 +1,611 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "CoolrfulDARkness/moonmls/types"
+
+import {
+  "CoolrfulDARkness/moonmls/tls",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub const CIPHER_SUITE_MLS_128_DHKEMP256_AES128GCM_SHA256_P256 : UInt32 = 0x0002
+
+pub const CIPHER_SUITE_MLS_128_DHKEMX25519_AES128GCM_SHA256_ED25519 : UInt32 = 0x0001
+
+pub const CIPHER_SUITE_MLS_128_DHKEMX25519_CHACHA20POLY1305_SHA256_ED25519 : UInt32 = 0x0003
+
+pub const CIPHER_SUITE_MLS_256_DHKEMP384_AES256GCM_SHA384_P384 : UInt32 = 0x0007
+
+pub const CIPHER_SUITE_MLS_256_DHKEMP521_AES256GCM_SHA512_P521 : UInt32 = 0x0005
+
+pub const CIPHER_SUITE_MLS_256_DHKEMX448_AES256GCM_SHA512_ED448 : UInt32 = 0x0004
+
+pub const CIPHER_SUITE_MLS_256_DHKEMX448_CHACHA20POLY1305_SHA512_ED448 : UInt32 = 0x0006
+
+pub const CREDENTIAL_TYPE_BASIC : UInt32 = 1
+
+pub const CREDENTIAL_TYPE_X509 : UInt32 = 2
+
+pub const EXT_APPLICATION_ID : UInt32 = 1
+
+pub const EXT_EXTERNAL_PUB : UInt32 = 4
+
+pub const EXT_EXTERNAL_SENDERS : UInt32 = 5
+
+pub const EXT_RATCHET_TREE : UInt32 = 2
+
+pub const EXT_REQUIRED_CAPABILITIES : UInt32 = 3
+
+pub const PROPOSAL_TYPE_ADD : UInt32 = 1
+
+pub const PROPOSAL_TYPE_EXTERNAL_INIT : UInt32 = 6
+
+pub const PROPOSAL_TYPE_GROUP_CONTEXT_EXTENSIONS : UInt32 = 7
+
+pub const PROPOSAL_TYPE_PSK : UInt32 = 4
+
+pub const PROPOSAL_TYPE_REINIT : UInt32 = 5
+
+pub const PROPOSAL_TYPE_REMOVE : UInt32 = 3
+
+pub const PROPOSAL_TYPE_UPDATE : UInt32 = 2
+
+pub const PROTOCOL_VERSION_MLS10 : UInt32 = 1
+
+pub fn decode_ratchet_tree(@tls.Reader) -> Array[Node?] raise @tls.TlsError
+
+pub fn encode_ratchet_tree(Array[Node?], @tls.Writer) -> Unit raise @tls.TlsError
+
+pub fn ratchet_tree_from_bytes(Bytes) -> Array[Node?] raise @tls.TlsError
+
+pub fn ratchet_tree_to_bytes(Array[Node?]) -> Bytes raise @tls.TlsError
+
+// Errors
+
+// Types and methods
+#derive(Eq, @debug.Debug)
+pub(all) struct AuthenticatedContent {
+  wire_format : WireFormat
+  content : FramedContent
+  auth : FramedContentAuthData
+}
+pub fn AuthenticatedContent::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn AuthenticatedContent::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn AuthenticatedContent::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn AuthenticatedContent::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct AuthenticatedContentTbm {
+  content_tbs : FramedContentTbs
+  auth : FramedContentAuthData
+}
+pub fn AuthenticatedContentTbm::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn AuthenticatedContentTbm::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn AuthenticatedContentTbm::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn AuthenticatedContentTbm::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct Capabilities {
+  versions : Array[UInt32]
+  cipher_suites : Array[UInt32]
+  extensions : Array[UInt32]
+  proposals : Array[UInt32]
+  credentials : Array[UInt32]
+}
+pub fn Capabilities::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn Capabilities::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn Capabilities::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn Capabilities::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct Commit {
+  proposals : Array[ProposalOrRef]
+  path : UpdatePath?
+}
+pub fn Commit::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn Commit::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn Commit::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn Commit::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ConfirmedTranscriptHashInput {
+  wire_format : WireFormat
+  content : FramedContent
+  signature : Bytes
+}
+pub fn ConfirmedTranscriptHashInput::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn ConfirmedTranscriptHashInput::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn ConfirmedTranscriptHashInput::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn ConfirmedTranscriptHashInput::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) enum ContentType {
+  Application
+  Proposal
+  Commit
+}
+pub fn ContentType::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn ContentType::encode(Self, @tls.Writer) -> Unit
+pub fn ContentType::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn ContentType::from_u8(Byte) -> Self raise @tls.TlsError
+pub fn ContentType::to_bytes(Self) -> Bytes
+pub fn ContentType::to_u8(Self) -> Byte
+
+#derive(Eq, @debug.Debug)
+pub(all) enum Credential {
+  Basic(Bytes)
+  X509(Array[Bytes])
+}
+pub fn Credential::credential_type(Self) -> UInt32
+pub fn Credential::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn Credential::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn Credential::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn Credential::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct EncryptedGroupSecrets {
+  new_member : Bytes
+  encrypted_group_secrets : HpkeCiphertext
+}
+pub fn EncryptedGroupSecrets::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn EncryptedGroupSecrets::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn EncryptedGroupSecrets::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn EncryptedGroupSecrets::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct Extension {
+  extension_type : UInt32
+  extension_data : Bytes
+}
+pub fn Extension::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn Extension::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn Extension::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn Extension::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct FramedContent {
+  group_id : Bytes
+  epoch : UInt64
+  sender : Sender
+  authenticated_data : Bytes
+  content : FramedContentBody
+}
+pub fn FramedContent::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn FramedContent::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn FramedContent::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn FramedContent::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct FramedContentAuthData {
+  signature : Bytes
+  confirmation_tag : Bytes?
+}
+pub fn FramedContentAuthData::decode(@tls.Reader, ContentType) -> Self raise @tls.TlsError
+pub fn FramedContentAuthData::encode(Self, @tls.Writer, ContentType) -> Unit raise @tls.TlsError
+pub fn FramedContentAuthData::from_bytes(Bytes, ContentType) -> Self raise @tls.TlsError
+pub fn FramedContentAuthData::to_bytes(Self, ContentType) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) enum FramedContentBody {
+  Application(Bytes)
+  Proposal(Proposal)
+  Commit(Commit)
+}
+pub fn FramedContentBody::content_type(Self) -> ContentType
+pub fn FramedContentBody::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn FramedContentBody::decode_payload(ContentType, @tls.Reader) -> Self raise @tls.TlsError
+pub fn FramedContentBody::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn FramedContentBody::encode_payload(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn FramedContentBody::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn FramedContentBody::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct FramedContentTbs {
+  version : UInt32
+  wire_format : WireFormat
+  content : FramedContent
+  context : GroupContext?
+}
+pub fn FramedContentTbs::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn FramedContentTbs::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn FramedContentTbs::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn FramedContentTbs::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct GroupContext {
+  version : UInt32
+  cipher_suite : UInt32
+  group_id : Bytes
+  epoch : UInt64
+  tree_hash : Bytes
+  confirmed_transcript_hash : Bytes
+  extensions : Array[Extension]
+}
+pub fn GroupContext::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn GroupContext::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn GroupContext::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn GroupContext::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct GroupInfo {
+  group_context : GroupContext
+  extensions : Array[Extension]
+  confirmation_tag : Bytes
+  signer : UInt32
+  signature : Bytes
+}
+pub fn GroupInfo::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn GroupInfo::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn GroupInfo::encode_tbs(Self) -> Bytes raise @tls.TlsError
+pub fn GroupInfo::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn GroupInfo::to_bytes(Self) -> Bytes raise @tls.TlsError
+pub fn GroupInfo::to_tbs(Self) -> GroupInfoTbs
+
+#derive(Eq, @debug.Debug)
+pub(all) struct GroupInfoTbs {
+  group_context : GroupContext
+  extensions : Array[Extension]
+  confirmation_tag : Bytes
+  signer : UInt32
+}
+pub fn GroupInfoTbs::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn GroupInfoTbs::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn GroupInfoTbs::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn GroupInfoTbs::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct GroupSecrets {
+  joiner_secret : Bytes
+  path_secret : Bytes?
+  psks : Array[PreSharedKeyId]
+}
+pub fn GroupSecrets::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn GroupSecrets::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn GroupSecrets::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn GroupSecrets::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct HpkeCiphertext {
+  kem_output : Bytes
+  ciphertext : Bytes
+}
+pub fn HpkeCiphertext::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn HpkeCiphertext::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn HpkeCiphertext::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn HpkeCiphertext::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct InterimTranscriptHashInput {
+  confirmation_tag : Bytes
+}
+pub fn InterimTranscriptHashInput::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn InterimTranscriptHashInput::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn InterimTranscriptHashInput::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn InterimTranscriptHashInput::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct KeyPackage {
+  version : UInt32
+  cipher_suite : UInt32
+  init_key : Bytes
+  leaf_node : LeafNode
+  extensions : Array[Extension]
+  signature : Bytes
+}
+pub fn KeyPackage::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn KeyPackage::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn KeyPackage::encode_tbs(Self) -> Bytes raise @tls.TlsError
+pub fn KeyPackage::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn KeyPackage::to_bytes(Self) -> Bytes raise @tls.TlsError
+pub fn KeyPackage::to_tbs(Self) -> KeyPackageTbs
+
+#derive(Eq, @debug.Debug)
+pub(all) struct KeyPackageTbs {
+  version : UInt32
+  cipher_suite : UInt32
+  init_key : Bytes
+  leaf_node : LeafNode
+  extensions : Array[Extension]
+}
+pub fn KeyPackageTbs::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn KeyPackageTbs::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn KeyPackageTbs::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn KeyPackageTbs::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct LeafNode {
+  encryption_key : Bytes
+  signature_key : Bytes
+  credential : Credential
+  capabilities : Capabilities
+  leaf_node_source : LeafNodeSource
+  lifetime : Lifetime?
+  parent_hash : Bytes?
+  extensions : Array[Extension]
+  signature : Bytes
+}
+pub fn LeafNode::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn LeafNode::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn LeafNode::encode_tbs(Self, Bytes?, UInt32?) -> Bytes raise @tls.TlsError
+pub fn LeafNode::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn LeafNode::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) enum LeafNodeSource {
+  KeyPackage
+  Update
+  Commit
+}
+pub fn LeafNodeSource::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn LeafNodeSource::encode(Self, @tls.Writer) -> Unit
+pub fn LeafNodeSource::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn LeafNodeSource::from_u8(Byte) -> Self raise @tls.TlsError
+pub fn LeafNodeSource::to_bytes(Self) -> Bytes
+pub fn LeafNodeSource::to_u8(Self) -> Byte
+
+#derive(Eq, @debug.Debug)
+pub(all) struct Lifetime {
+  not_before : UInt64
+  not_after : UInt64
+}
+pub fn Lifetime::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn Lifetime::encode(Self, @tls.Writer) -> Unit
+pub fn Lifetime::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn Lifetime::to_bytes(Self) -> Bytes
+
+#derive(Eq, @debug.Debug)
+pub(all) struct MlsMessage {
+  version : UInt32
+  body : MlsMessageBody
+}
+pub fn MlsMessage::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn MlsMessage::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn MlsMessage::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn MlsMessage::group_info(GroupInfo) -> Self
+pub fn MlsMessage::key_package(KeyPackage) -> Self
+pub fn MlsMessage::private_message(PrivateMessage) -> Self
+pub fn MlsMessage::public_message(PublicMessage) -> Self
+pub fn MlsMessage::to_bytes(Self) -> Bytes raise @tls.TlsError
+pub fn MlsMessage::welcome(Welcome) -> Self
+pub fn MlsMessage::wire_format(Self) -> WireFormat
+
+#derive(Eq, @debug.Debug)
+pub(all) enum MlsMessageBody {
+  PublicMessage(PublicMessage)
+  PrivateMessage(PrivateMessage)
+  Welcome(Welcome)
+  GroupInfo(GroupInfo)
+  KeyPackage(KeyPackage)
+}
+pub fn MlsMessageBody::wire_format(Self) -> WireFormat
+
+#derive(Eq, @debug.Debug)
+pub(all) struct MlsSenderData {
+  leaf_index : UInt32
+  generation : UInt32
+  reuse_guard : Bytes
+}
+pub fn MlsSenderData::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn MlsSenderData::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn MlsSenderData::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn MlsSenderData::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct MlsSenderDataAad {
+  group_id : Bytes
+  epoch : UInt64
+  content_type : ContentType
+}
+pub fn MlsSenderDataAad::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn MlsSenderDataAad::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn MlsSenderDataAad::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn MlsSenderDataAad::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) enum Node {
+  Leaf(LeafNode)
+  Parent(ParentNode)
+}
+pub fn Node::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn Node::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn Node::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn Node::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct ParentNode {
+  encryption_key : Bytes
+  parent_hash : Bytes
+  unmerged_leaves : Array[UInt32]
+}
+pub fn ParentNode::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn ParentNode::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn ParentNode::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn ParentNode::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) enum PreSharedKeyId {
+  External(psk_id~ : Bytes, psk_nonce~ : Bytes)
+  Resumption(usage~ : UInt32, psk_group_id~ : Bytes, psk_epoch~ : UInt64, psk_nonce~ : Bytes)
+}
+pub fn PreSharedKeyId::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn PreSharedKeyId::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn PreSharedKeyId::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn PreSharedKeyId::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct PrivateContentAad {
+  group_id : Bytes
+  epoch : UInt64
+  content_type : ContentType
+  authenticated_data : Bytes
+}
+pub fn PrivateContentAad::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn PrivateContentAad::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn PrivateContentAad::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn PrivateContentAad::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct PrivateMessage {
+  group_id : Bytes
+  epoch : UInt64
+  content_type : ContentType
+  authenticated_data : Bytes
+  encrypted_sender_data : Bytes
+  ciphertext : Bytes
+}
+pub fn PrivateMessage::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn PrivateMessage::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn PrivateMessage::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn PrivateMessage::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct PrivateMessageContent {
+  content : FramedContentBody
+  auth : FramedContentAuthData
+  padding_len : Int32
+}
+pub fn PrivateMessageContent::decode(@tls.Reader, ContentType) -> Self raise @tls.TlsError
+pub fn PrivateMessageContent::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn PrivateMessageContent::from_bytes(Bytes, ContentType) -> Self raise @tls.TlsError
+pub fn PrivateMessageContent::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) enum Proposal {
+  Add(KeyPackage)
+  Update(LeafNode)
+  Remove(UInt32)
+  PreSharedKey(PreSharedKeyId)
+  ReInit(group_id~ : Bytes, version~ : UInt32, cipher_suite~ : UInt32, extensions~ : Array[Extension])
+  ExternalInit(Bytes)
+  GroupContextExtensions(Array[Extension])
+}
+pub fn Proposal::body_from_bytes(UInt32, Bytes) -> Self raise @tls.TlsError
+pub fn Proposal::body_to_bytes(Self) -> Bytes raise @tls.TlsError
+pub fn Proposal::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn Proposal::decode_body(UInt32, @tls.Reader) -> Self raise @tls.TlsError
+pub fn Proposal::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn Proposal::encode_body(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn Proposal::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn Proposal::proposal_type(Self) -> UInt32
+pub fn Proposal::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) enum ProposalOrRef {
+  Proposal(Proposal)
+  Reference(Bytes)
+}
+pub fn ProposalOrRef::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn ProposalOrRef::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn ProposalOrRef::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn ProposalOrRef::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) enum ProtocolVersion {
+  Mls10
+}
+pub fn ProtocolVersion::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn ProtocolVersion::encode(Self, @tls.Writer) -> Unit
+pub fn ProtocolVersion::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn ProtocolVersion::from_u16(UInt32) -> Self raise @tls.TlsError
+pub fn ProtocolVersion::to_bytes(Self) -> Bytes
+pub fn ProtocolVersion::to_u16(Self) -> UInt32
+
+#derive(Eq, @debug.Debug)
+pub(all) enum PskType {
+  External
+  Resumption
+}
+pub fn PskType::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn PskType::encode(Self, @tls.Writer) -> Unit
+pub fn PskType::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn PskType::from_u8(Byte) -> Self raise @tls.TlsError
+pub fn PskType::to_bytes(Self) -> Bytes
+pub fn PskType::to_u8(Self) -> Byte
+
+#derive(Eq, @debug.Debug)
+pub(all) struct PublicMessage {
+  content : FramedContent
+  auth : FramedContentAuthData
+  membership_tag : Bytes?
+}
+pub fn PublicMessage::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn PublicMessage::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn PublicMessage::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn PublicMessage::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) enum ResumptionPskUsage {
+  Application
+  Reinit
+  Branch
+}
+pub fn ResumptionPskUsage::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn ResumptionPskUsage::encode(Self, @tls.Writer) -> Unit
+pub fn ResumptionPskUsage::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn ResumptionPskUsage::from_u8(Byte) -> Self raise @tls.TlsError
+pub fn ResumptionPskUsage::to_bytes(Self) -> Bytes
+pub fn ResumptionPskUsage::to_u8(Self) -> Byte
+
+#derive(Eq, @debug.Debug)
+pub(all) enum Sender {
+  Member(UInt32)
+  External(UInt32)
+  NewMemberProposal
+  NewMemberCommit
+}
+pub fn Sender::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn Sender::encode(Self, @tls.Writer) -> Unit
+pub fn Sender::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn Sender::to_bytes(Self) -> Bytes
+
+#derive(Eq, @debug.Debug)
+pub(all) struct UpdatePath {
+  leaf_node : LeafNode
+  nodes : Array[UpdatePathNode]
+}
+pub fn UpdatePath::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn UpdatePath::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn UpdatePath::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn UpdatePath::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct UpdatePathNode {
+  encryption_key : Bytes
+  encrypted_path_secret : Array[HpkeCiphertext]
+}
+pub fn UpdatePathNode::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn UpdatePathNode::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn UpdatePathNode::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn UpdatePathNode::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) struct Welcome {
+  cipher_suite : UInt32
+  secrets : Array[EncryptedGroupSecrets]
+  encrypted_group_info : Bytes
+}
+pub fn Welcome::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn Welcome::encode(Self, @tls.Writer) -> Unit raise @tls.TlsError
+pub fn Welcome::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn Welcome::to_bytes(Self) -> Bytes raise @tls.TlsError
+
+#derive(Eq, @debug.Debug)
+pub(all) enum WireFormat {
+  MlsPublicMessage
+  MlsPrivateMessage
+  MlsWelcome
+  MlsGroupInfo
+  MlsKeyPackage
+}
+pub fn WireFormat::decode(@tls.Reader) -> Self raise @tls.TlsError
+pub fn WireFormat::encode(Self, @tls.Writer) -> Unit
+pub fn WireFormat::from_bytes(Bytes) -> Self raise @tls.TlsError
+pub fn WireFormat::from_u16(UInt32) -> Self raise @tls.TlsError
+pub fn WireFormat::to_bytes(Self) -> Bytes
+pub fn WireFormat::to_u16(Self) -> UInt32
+
+// Type aliases
+pub type CipherSuiteId = UInt32
+
+pub type RatchetTree = Array[Node?]
+
+// Traits
