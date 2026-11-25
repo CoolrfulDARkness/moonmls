@@ -1,0 +1,97 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "CoolrfulDARkness/moonmls/tree"
+
+import {
+  "CoolrfulDARkness/moonmls/ciphersuite",
+  "CoolrfulDARkness/moonmls/crypto",
+  "CoolrfulDARkness/moonmls/tls",
+  "CoolrfulDARkness/moonmls/types",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn derive_sender_data_key(@ciphersuite.CipherSuite, Bytes, Bytes) -> Bytes raise TreeError
+
+pub fn derive_sender_data_nonce(@ciphersuite.CipherSuite, Bytes, Bytes) -> Bytes raise TreeError
+
+pub fn verify_leaf_signature(@ciphersuite.CipherSuite, @types.LeafNode, Bytes, UInt32) -> Unit raise TreeError
+
+// Errors
+#derive(Eq, @debug.Debug)
+pub(all) suberror TreeError {
+  OutOfBounds(UInt32)
+  EmptyTree
+  InvalidTreeSize(Int32)
+  BlankLeaf(UInt32)
+  UnexpectedNodeType(UInt32)
+  InvalidParentHash
+  InvalidLeafSignature(UInt32)
+  DuplicateKey
+  InvalidUnmergedLeaf
+  ReplayDetected(UInt32)
+  GenerationTooFarAhead(UInt32)
+  PathMismatch
+  NoCommonAncestor
+  CsError(@ciphersuite.CsError)
+  TlsError(@tls.TlsError)
+}
+pub impl Show for TreeError
+
+// Types and methods
+#derive(Eq, @debug.Debug)
+pub(all) struct PreparedUpdatePath {
+  leaf_node : @types.LeafNode
+  leaf_enc_priv : Bytes
+  path_node_keys : Array[(UInt32, Bytes, Bytes)]
+  path_secrets : Array[(UInt32, Bytes)]
+  commit_secret : Bytes
+  tree_hash : Bytes
+}
+
+pub struct RatchetTreeState {
+  mut nodes : Array[@types.Node?]
+}
+pub fn RatchetTreeState::active_leaf_indices(Self) -> Array[UInt32]
+pub fn RatchetTreeState::add_leaf(Self, @types.LeafNode) -> UInt32 raise TreeError
+pub fn RatchetTreeState::apply_proposal(Self, UInt32, @types.Proposal) -> UInt32? raise TreeError
+pub fn RatchetTreeState::clone(Self) -> Self
+pub fn RatchetTreeState::compute_parent_hash(Self, @ciphersuite.CipherSuite, UInt32, UInt32) -> Bytes raise TreeError
+pub fn RatchetTreeState::decrypt_update_path(Self, @ciphersuite.CipherSuite, UInt32, UInt32, @types.UpdatePath, Bytes, Array[UInt32], (UInt32) -> Bytes?) -> (Array[(UInt32, Bytes)], Bytes) raise TreeError
+pub fn RatchetTreeState::derive_path_secrets_from(Self, @ciphersuite.CipherSuite, UInt32, UInt32, Bytes) -> (Array[(UInt32, Bytes)], Bytes) raise TreeError
+pub fn RatchetTreeState::encrypt_path_secrets(Self, @ciphersuite.CipherSuite, UInt32, PreparedUpdatePath, Bytes, Array[UInt32], @crypto.DeterministicRng) -> @types.UpdatePath raise TreeError
+pub fn RatchetTreeState::filtered_direct_path(Self, UInt32) -> Array[(UInt32, UInt32)] raise TreeError
+pub fn RatchetTreeState::find_leaf_by_sig_key(Self, Bytes) -> UInt32?
+pub fn RatchetTreeState::from_nodes(Array[@types.Node?]) -> Self raise TreeError
+pub fn RatchetTreeState::get_leaf(Self, UInt32) -> @types.LeafNode? raise TreeError
+pub fn RatchetTreeState::get_node(Self, UInt32) -> @types.Node? raise TreeError
+pub fn RatchetTreeState::get_parent(Self, UInt32) -> @types.ParentNode? raise TreeError
+pub fn RatchetTreeState::merge_update_path_nodes(Self, @ciphersuite.CipherSuite, UInt32, @types.UpdatePath, Bytes, Array[UInt32]) -> Unit raise TreeError
+pub fn RatchetTreeState::n_leaves(Self) -> UInt32
+pub fn RatchetTreeState::n_nodes(Self) -> UInt32
+pub fn RatchetTreeState::new(@types.LeafNode) -> Self
+pub fn RatchetTreeState::node_hash(Self, @ciphersuite.CipherSuite, UInt32) -> Bytes raise TreeError
+pub fn RatchetTreeState::prepare_update_path_tree(Self, @ciphersuite.CipherSuite, UInt32, @types.LeafNode, Bytes, Bytes, Bytes) -> PreparedUpdatePath raise TreeError
+pub fn RatchetTreeState::remove_leaf(Self, UInt32) -> Unit raise TreeError
+pub fn RatchetTreeState::resolution(Self, UInt32) -> Array[UInt32] raise TreeError
+pub fn RatchetTreeState::to_nodes(Self) -> Array[@types.Node?]
+pub fn RatchetTreeState::to_trimmed_nodes(Self) -> Array[@types.Node?]
+pub fn RatchetTreeState::tree_hash(Self, @ciphersuite.CipherSuite) -> Bytes raise TreeError
+pub fn RatchetTreeState::update_leaf(Self, UInt32, @types.LeafNode) -> Unit raise TreeError
+pub fn RatchetTreeState::validate_leaf_signatures(Self, @ciphersuite.CipherSuite, Bytes) -> Unit raise TreeError
+pub fn RatchetTreeState::validate_parent_hashes(Self, @ciphersuite.CipherSuite) -> Unit raise TreeError
+pub fn RatchetTreeState::validate_tree_structure(Self) -> Unit raise TreeError
+
+pub struct SecretTree {
+  // private fields
+}
+pub fn SecretTree::application_key_nonce_for_generation(Self, UInt32, UInt32) -> (Bytes, Bytes) raise TreeError
+pub fn SecretTree::handshake_key_nonce_for_generation(Self, UInt32, UInt32) -> (Bytes, Bytes) raise TreeError
+pub fn SecretTree::leaf_secret(Self, UInt32) -> Bytes raise TreeError
+pub fn SecretTree::new(@ciphersuite.CipherSuite, Bytes, UInt32) -> Self
+pub fn SecretTree::new_with_window(@ciphersuite.CipherSuite, Bytes, UInt32, UInt32, UInt32) -> Self
+pub fn SecretTree::next_application_key_nonce(Self, UInt32) -> (UInt32, Bytes, Bytes) raise TreeError
+pub fn SecretTree::next_handshake_key_nonce(Self, UInt32) -> (UInt32, Bytes, Bytes) raise TreeError
+
+// Type aliases
+
+// Traits
