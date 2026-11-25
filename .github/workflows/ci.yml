@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Format, Info, Test (wasm-gc / js / native), Bench & Smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install MoonBit CLI
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Show toolchain versions
+        run: |
+          moon version --all
+          node --version
+
+      - name: Check formatting (moon fmt --check)
+        run: moon fmt --check
+
+      - name: Check generated interfaces (moon info)
+        run: |
+          moon info
+          if [ -n "$(git status --porcelain -- '*.mbti' '**/*.mbti')" ]; then
+            echo "Error: generated .mbti files are out of sync. Run 'moon info' and commit the changes."
+            git status --short -- '*.mbti' '**/*.mbti'
+            git diff -- '*.mbti' '**/*.mbti'
+            exit 1
+          fi
+
+      - name: Run tests (wasm-gc, -d)
+        run: moon test --target wasm-gc -d
+
+      - name: Run tests (js, -d)
+        run: moon test --target js -d
+
+      - name: Run tests (native, -d)
+        run: moon test --target native -d
+
+      - name: Verify benchmarks build (wasm-gc, -d)
+        run: moon bench --build-only --target wasm-gc -d
+
+      - name: CLI demo smoke check (wasm-gc)
+        run: moon run cmd/main --target wasm-gc
