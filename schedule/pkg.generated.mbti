@@ -1,0 +1,94 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "CoolrfulDARkness/moonmls/schedule"
+
+import {
+  "CoolrfulDARkness/moonmls/ciphersuite",
+  "CoolrfulDARkness/moonmls/crypto",
+  "CoolrfulDARkness/moonmls/tls",
+  "CoolrfulDARkness/moonmls/types",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn compute_confirmation_tag(@ciphersuite.CipherSuite, Bytes, Bytes) -> Bytes
+
+pub fn compute_confirmed_transcript_hash(@ciphersuite.CipherSuite, Bytes, @types.ConfirmedTranscriptHashInput) -> Bytes raise ScheduleError
+
+pub fn compute_interim_transcript_hash(@ciphersuite.CipherSuite, Bytes, Bytes) -> Bytes raise ScheduleError
+
+pub fn compute_membership_tag(@ciphersuite.CipherSuite, Bytes, @types.AuthenticatedContentTbm) -> Bytes raise ScheduleError
+
+pub fn compute_psk_secret(@ciphersuite.CipherSuite, Array[(@types.PreSharedKeyId, Bytes)]) -> Bytes raise ScheduleError
+
+pub fn decrypt_private_message_with_keys(@ciphersuite.CipherSuite, Bytes, @types.GroupContext, @types.MlsSenderData, Bytes, Bytes, @types.PrivateMessage) -> @types.AuthenticatedContent raise ScheduleError
+
+pub fn decrypt_sender_data(@ciphersuite.CipherSuite, Bytes, @types.PrivateMessage) -> @types.MlsSenderData raise ScheduleError
+
+pub fn derive_epoch_secrets(@ciphersuite.CipherSuite, Bytes, Bytes, Bytes, Bytes) -> EpochSecrets raise ScheduleError
+
+pub fn derive_epoch_secrets_from_joiner(@ciphersuite.CipherSuite, Bytes, Bytes, Bytes) -> EpochSecrets raise ScheduleError
+
+pub fn derive_joiner_secret(@ciphersuite.CipherSuite, Bytes, Bytes, Bytes) -> Bytes raise ScheduleError
+
+pub fn derive_sender_data_key_nonce(@ciphersuite.CipherSuite, Bytes, Bytes) -> (Bytes, Bytes) raise ScheduleError
+
+pub fn derive_welcome_key_nonce(@ciphersuite.CipherSuite, Bytes) -> (Bytes, Bytes) raise ScheduleError
+
+pub fn derive_welcome_secret(@ciphersuite.CipherSuite, Bytes, Bytes) -> Bytes raise ScheduleError
+
+pub fn encrypt_private_message_with_keys(@ciphersuite.CipherSuite, Bytes, @types.MlsSenderData, Bytes, Bytes, @types.FramedContent, @types.FramedContentAuthData, Int32) -> @types.PrivateMessage raise ScheduleError
+
+pub fn mls_exporter(@ciphersuite.CipherSuite, Bytes, String, Bytes, Int32) -> Bytes raise ScheduleError
+
+pub fn protect_public_message(@ciphersuite.CipherSuite, Bytes, Bytes?, @types.FramedContent, @types.GroupContext?, Bytes?) -> @types.PublicMessage raise ScheduleError
+
+pub fn sign_framed_content(@ciphersuite.CipherSuite, Bytes, @types.WireFormat, @types.FramedContent, @types.GroupContext?) -> Bytes raise ScheduleError
+
+pub fn unprotect_public_message(@ciphersuite.CipherSuite, Bytes, Bytes?, @types.PublicMessage, @types.GroupContext?) -> @types.AuthenticatedContent raise ScheduleError
+
+pub fn verify_confirmation_tag(@ciphersuite.CipherSuite, Bytes, Bytes, Bytes) -> Bool
+
+pub fn verify_framed_content(@ciphersuite.CipherSuite, Bytes, @types.WireFormat, @types.FramedContent, @types.GroupContext?, Bytes) -> Bool
+
+pub fn verify_membership_tag(@ciphersuite.CipherSuite, Bytes, @types.AuthenticatedContentTbm, Bytes) -> Bool
+
+// Errors
+#derive(Eq, @debug.Debug)
+pub(all) suberror ScheduleError {
+  CsError(@ciphersuite.CsError)
+  TlsError(@tls.TlsError)
+  CryptoError(@crypto.CryptoError)
+  InvalidSignature
+  InvalidMembershipTag
+  InvalidConfirmationTag
+  MissingMembershipKey
+  MissingGroupContext
+  InvalidReuseGuard
+  DecryptionFailed
+  InvalidWireFormat
+  UnexpectedContentType
+}
+pub impl Show for ScheduleError
+
+// Types and methods
+#derive(Eq, @debug.Debug)
+pub(all) struct EpochSecrets {
+  joiner_secret : Bytes
+  welcome_secret : Bytes
+  epoch_secret : Bytes
+  sender_data_secret : Bytes
+  encryption_secret : Bytes
+  exporter_secret : Bytes
+  external_secret : Bytes
+  confirmation_key : Bytes
+  membership_key : Bytes
+  resumption_psk : Bytes
+  epoch_authenticator : Bytes
+  init_secret : Bytes
+  external_priv : Bytes
+  external_pub : Bytes
+}
+
+// Type aliases
+
+// Traits
