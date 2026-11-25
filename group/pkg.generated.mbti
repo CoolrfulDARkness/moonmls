@@ -1,0 +1,103 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "CoolrfulDARkness/moonmls/group"
+
+import {
+  "CoolrfulDARkness/moonmls/ciphersuite",
+  "CoolrfulDARkness/moonmls/crypto",
+  "CoolrfulDARkness/moonmls/schedule",
+  "CoolrfulDARkness/moonmls/tls",
+  "CoolrfulDARkness/moonmls/tree",
+  "CoolrfulDARkness/moonmls/types",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn verify_and_decrypt_welcome(@ciphersuite.CipherSuite, @types.Welcome, Bytes, @types.KeyPackage, Bytes) -> WelcomeVerification raise GroupError
+
+pub fn verify_key_package(@ciphersuite.CipherSuite, @types.KeyPackage) -> Unit raise GroupError
+
+// Errors
+#derive(Eq, @debug.Debug)
+pub(all) suberror GroupError {
+  TlsError(@tls.TlsError)
+  CryptoError(@crypto.CryptoError)
+  CsError(@ciphersuite.CsError)
+  TreeError(@tree.TreeError)
+  ScheduleError(@schedule.ScheduleError)
+  InvalidKeyPackage(String)
+  WelcomeKeyPackageNotFound
+  MissingRatchetTree
+  InvalidGroupInfoSignature
+  TreeHashMismatch
+  ConfirmationTagMismatch
+  GroupIdMismatch
+  EpochMismatch(UInt64, UInt64)
+  UnknownSender(UInt32)
+  MemberRemoved
+  InvalidProposal(String)
+  InvalidCommit(String)
+  MissingPrivateKey(UInt32)
+  CannotRemoveSelf
+  UnsupportedProtocolVersion(UInt32)
+  CipherSuiteMismatch
+}
+pub impl Show for GroupError
+
+// Types and methods
+#derive(Eq, @debug.Debug)
+pub(all) struct CommitOutput {
+  commit_msg : @types.PrivateMessage
+  welcome : @types.Welcome?
+  new_epoch : UInt64
+}
+
+#derive(Eq, @debug.Debug)
+pub(all) struct KeyPackageBundle {
+  key_package : @types.KeyPackage
+  init_priv : Bytes
+  encryption_priv : Bytes
+  signature_priv : Bytes
+}
+pub fn KeyPackageBundle::generate(@ciphersuite.CipherSuite, Bytes, @crypto.DeterministicRng) -> Self raise GroupError
+
+pub struct MlsGroup {
+  // private fields
+}
+pub fn MlsGroup::cipher_suite(Self) -> @ciphersuite.CipherSuite
+pub fn MlsGroup::commit(Self, Array[@types.Proposal], @crypto.DeterministicRng) -> CommitOutput raise GroupError
+pub fn MlsGroup::commit_pending(Self, @crypto.DeterministicRng) -> CommitOutput raise GroupError
+pub fn MlsGroup::create(@ciphersuite.CipherSuite, Bytes, Bytes, @crypto.DeterministicRng) -> Self raise GroupError
+pub fn MlsGroup::create_from_bundle(@ciphersuite.CipherSuite, Bytes, KeyPackageBundle, @crypto.DeterministicRng) -> Self raise GroupError
+pub fn MlsGroup::epoch(Self) -> UInt64
+pub fn MlsGroup::epoch_authenticator(Self) -> Bytes
+pub fn MlsGroup::export_secret(Self, String, Bytes, Int32) -> Bytes raise GroupError
+pub fn MlsGroup::from_welcome(@ciphersuite.CipherSuite, @types.Welcome, KeyPackageBundle, Array[@types.Node?]?) -> Self raise GroupError
+pub fn MlsGroup::group_id(Self) -> Bytes
+pub fn MlsGroup::is_active(Self) -> Bool
+pub fn MlsGroup::members(Self) -> Array[(UInt32, Bytes)]
+pub fn MlsGroup::my_leaf_index(Self) -> UInt32
+pub fn MlsGroup::process_message(Self, @types.PrivateMessage) -> ProcessedMessage raise GroupError
+pub fn MlsGroup::propose_add(Self, @types.KeyPackage, @crypto.DeterministicRng) -> @types.PrivateMessage raise GroupError
+pub fn MlsGroup::propose_remove(Self, UInt32, @crypto.DeterministicRng) -> @types.PrivateMessage raise GroupError
+pub fn MlsGroup::propose_update(Self, @crypto.DeterministicRng) -> @types.PrivateMessage raise GroupError
+pub fn MlsGroup::protect_application(Self, Bytes, Bytes, @crypto.DeterministicRng) -> @types.PrivateMessage raise GroupError
+pub fn MlsGroup::ratchet_tree_nodes(Self) -> Array[@types.Node?]
+pub fn MlsGroup::tree_hash(Self) -> Bytes
+
+#derive(Eq, @debug.Debug)
+pub(all) enum ProcessedMessage {
+  Application(UInt32, Bytes, Bytes)
+  Proposal(UInt32, @types.Proposal)
+  Commit(UInt32, UInt64)
+}
+
+#derive(Eq, @debug.Debug)
+pub(all) struct WelcomeVerification {
+  group_info : @types.GroupInfo
+  group_secrets : @types.GroupSecrets
+  secrets : @schedule.EpochSecrets
+}
+
+// Type aliases
+
+// Traits

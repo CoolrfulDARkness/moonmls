@@ -1,3 +1,5 @@
-// Whitebox tests run within the package scope.
-// Use them to validate internal helpers or invariants.
-// Keep them focused; public behavior belongs in `_test.mbt`.
+///|
+test "top-level cipher suite helpers" {
+  assert_eq(cs_x25519_aes128gcm().id(), 1U)
+  assert_eq(cs_x25519_chacha20poly1305().id(), 3U)
+}

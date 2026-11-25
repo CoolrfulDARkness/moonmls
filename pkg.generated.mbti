@@ -1,0 +1,61 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "CoolrfulDARkness/moonmls"
+
+import {
+  "CoolrfulDARkness/moonmls/ciphersuite",
+  "CoolrfulDARkness/moonmls/crypto",
+  "CoolrfulDARkness/moonmls/group",
+  "CoolrfulDARkness/moonmls/types",
+}
+
+// Values
+pub fn create_group(@ciphersuite.CipherSuite, Bytes, Bytes, @crypto.DeterministicRng) -> @group.MlsGroup raise @group.GroupError
+
+pub fn create_group_from_bundle(@ciphersuite.CipherSuite, Bytes, @group.KeyPackageBundle, @crypto.DeterministicRng) -> @group.MlsGroup raise @group.GroupError
+
+pub fn cs_x25519_aes128gcm() -> @ciphersuite.CipherSuite
+
+pub fn cs_x25519_chacha20poly1305() -> @ciphersuite.CipherSuite
+
+pub fn generate_key_package(@ciphersuite.CipherSuite, Bytes, @crypto.DeterministicRng) -> @group.KeyPackageBundle raise @group.GroupError
+
+pub fn join_group_from_welcome(@ciphersuite.CipherSuite, @types.Welcome, @group.KeyPackageBundle, Array[@types.Node?]?) -> @group.MlsGroup raise @group.GroupError
+
+pub fn rng_from_seed(Bytes) -> @crypto.DeterministicRng
+
+pub fn verify_and_decrypt_welcome(@ciphersuite.CipherSuite, @types.Welcome, Bytes, @types.KeyPackage, Bytes) -> @group.WelcomeVerification raise @group.GroupError
+
+pub fn verify_key_package(@ciphersuite.CipherSuite, @types.KeyPackage) -> Unit raise @group.GroupError
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+pub using @ciphersuite {type CipherSuite}
+
+pub using @group {type CommitOutput}
+
+pub using @crypto {type DeterministicRng}
+
+pub using @group {type GroupError}
+
+pub using @types {type KeyPackage}
+
+pub using @group {type KeyPackageBundle}
+
+pub using @group {type MlsGroup}
+
+pub using @types {type PrivateMessage}
+
+pub using @group {type ProcessedMessage}
+
+pub using @types {type Proposal}
+
+pub type RatchetTree = Array[@types.Node?]
+
+pub using @types {type Welcome}
+
+pub using @group {type WelcomeVerification}
+
+// Traits
